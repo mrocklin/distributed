@@ -147,6 +147,9 @@ def run_nanny(q, center_port, **kwargs):
 
 @contextmanager
 def cluster(nworkers=2, nanny=False):
+    import psutil
+    startps = psutil.Process().num_fds()
+
     if nanny:
         _run_worker = run_nanny
     else:
@@ -199,6 +202,8 @@ def cluster(nworkers=2, nanny=False):
         for fn in glob('_test_worker-*'):
             shutil.rmtree(fn)
         loop.close(all_fds=True)
+        endps = psutil.Process().num_fds()
+        print("Start: %d, End: %d" % (startps, endps))
 
 
 @contextmanager
@@ -415,6 +420,9 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
         cor = gen.coroutine(func)
 
         def test_func():
+            import psutil
+            startps = psutil.Process().num_fds()
+
             IOLoop.clear_instance()
             loop = IOLoop()
             loop.make_current()
@@ -435,6 +443,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
                 loop.run_sync(lambda: end_cluster(s, workers))
                 loop.stop()
                 loop.close(all_fds=True)
+                endps = psutil.Process().num_fds()
+                print("Start: %d, End: %d" % (startps, endps))
 
         return test_func
     return _
