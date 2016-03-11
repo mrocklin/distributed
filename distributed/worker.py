@@ -231,7 +231,7 @@ class Worker(Server):
                        for k, v in who_has.items()
                        if k not in self.data}
             try:
-                logger.info("gather %d keys from peers: %s",
+                logger.debug("gather %d keys from peers: %s",
                             len(who_has), str(who_has))
                 start = default_timer()
                 other = yield gather_from_workers(who_has)
@@ -289,7 +289,7 @@ class Worker(Server):
         """
         job_counter[0] += 1
         i = job_counter[0]
-        logger.info("Start job %d, %s", i, key)
+        logger.debug("Start job %d, %s", i, key)
         future = self.executor.submit(function, *args, **kwargs)
         pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
             key, future._state), 1000); pc.start()
@@ -302,14 +302,14 @@ class Worker(Server):
                         yield gen.with_timeout(timedelta(seconds=1), future)
                         break
                     except gen.TimeoutError:
-                        logger.info("work queue size: %d", self.executor._work_queue.qsize())
-                        logger.info("future state: %s", future._state)
-                        logger.info("Pending job %d: %s", i, future)
+                        logger.debug("work queue size: %d", self.executor._work_queue.qsize())
+                        logger.debug("future state: %s", future._state)
+                        logger.debug("Pending job %d: %s", i, future)
         finally:
             pc.stop()
 
         result = future.result()
-        logger.info("Finish job %d, %s", i, key)
+        logger.debug("Finish job %d, %s", i, key)
         return result
 
     @gen.coroutine
@@ -422,7 +422,7 @@ class Worker(Server):
         for key in keys:
             if key in self.data:
                 del self.data[key]
-        logger.info("Deleted %d keys", len(keys))
+        logger.debug("Deleted %d keys", len(keys))
         if report:
             logger.debug("Reporting loss of keys to center")
             yield self.center.remove_keys(address=self.address,
