@@ -997,7 +997,10 @@ class Scheduler(Server):
                     msg = yield self.worker_queues[ident].get()
                 except KeyError:
                     break
-                yield write(stream, msg)
+                try:
+                    yield write(stream, msg)
+                except StreamClosedError:
+                    break
 
                 if msg['op'] == 'close':
                     logger.debug("Worker coroutine close message %s, %s",
@@ -1010,8 +1013,10 @@ class Scheduler(Server):
         @gen.coroutine
         def recv():
             while True:
-                assert not stream._closed
-                msg = yield read(stream)
+                try:
+                    msg = yield read(stream)
+                except StreamClosedError:
+                    break
 
                 logger.debug("Compute response from worker %s, %s",
                              ident, msg)
