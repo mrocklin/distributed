@@ -395,6 +395,7 @@ class Worker(Server):
                 self.active.remove(key)
             except KeyError:
                 pass
+            result['occupancy'] = len(self.active)
             raise Return(result)
 
     @gen.coroutine

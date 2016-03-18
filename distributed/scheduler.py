@@ -436,18 +436,50 @@ class Scheduler(Server):
                 if not s and dep and dep not in self.who_wants:
                     self.delete_data(keys=[dep])
 
-    def ensure_occupied(self, worker):
-        """ Send tasks to worker while it has tasks and free cores
+    def ensure_occupied(self, worker, observed=None, oversubscribe=2):
+        """ Send tasks to worker to keep it occupied
 
-        These tasks may come from the worker's own stacks or from the global
-        ready deque.
+        First we determine the correct number of tasks to send.
+        If there are many open slots, send that many
+        If we observe that there are fewer tasks on the worker than our target
+        amount, send at least two (this causes positive feedback)
+
+        Parameters
+        ----------
+        worker: address
+        observed: the number of tasks last seen on the machine
+        oversubscribe: int, factor by which to multiply the ncores
+
 
         We update the idle workers set appropriately.
         """
         logger.debug('Ensure worker is occupied: %s', worker)
 
-        while (self.stacks[worker] and
-               self.ncores[worker] > len(self.processing[worker])):
+        target = self.ncores[worker] * oversubscribe
+        total = len(self.processing[worker])
+
+        if total + 1 < target:                              # Many slots free
+            ntasks = target - total
+        elif observed is not None and observed < target:    # At least two
+            ntasks = 2
+        else:
+            ntasks = max(0, target - total)
+
+        self.send_tasks_to_worker(worker, ntasks)
+
+        if target > len(self.processing[worker]):
+            self.idle.add(worker)
+        elif worker in self.idle:
+            self.idle.remove(worker)
+
+    def send_tasks_to_worker(self, worker, n):
+        """ Send n tasks to worker.  Choose first from stack, then ready
+
+        See Also:
+            ensure_occupied
+        """
+        while self.stacks[worker] and n > 0:
+            n -= 1
             key = self.stacks[worker].pop()
             if key not in self.tasks:
                 continue
@@ -457,8 +489,8 @@ class Scheduler(Server):
             logger.debug("Send job to worker: %s, %s", worker, key)
             self.send_task_to_worker(worker, key)
 
-        while (self.ready and
-               self.ncores[worker] > len(self.processing[worker])):
+        while self.ready and n > 0:
+            n -= 1
             key = self.ready.pop()
             if key not in self.tasks:
                 continue
@@ -467,11 +499,6 @@ class Scheduler(Server):
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
             self.send_task_to_worker(worker, key)
-
-        if self.ncores[worker] > len(self.processing[worker]):
-            self.idle.add(worker)
-        elif worker in self.idle:
-            self.idle.remove(worker)
 
     def update_data(self, who_has=None, nbytes=None, client=None):
         """
@@ -542,7 +569,6 @@ class Scheduler(Server):
         if worker in self.processing and key in self.processing[worker]:
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker], type=type)
-            self.ensure_occupied(worker)
             for plugin in self.plugins[:]:
                 try:
                     plugin.task_finished(self, key, worker, nbytes)
@@ -551,7 +577,6 @@ class Scheduler(Server):
         else:
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
-            self.ensure_occupied(worker)
         # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def recover_missing(self, key):
@@ -1076,7 +1101,7 @@ class Scheduler(Server):
                         logger.warn("Unknown message type, %s, %s", msg['status'],
                                 msg)
 
-                self.ensure_occupied(ident)
+                self.ensure_occupied(ident, msg.get('occupancy', None))
         except (StreamClosedError, IOError, OSError) as e:
             logger.info("Worker failed from closed stream: %s", ident)
         finally:
