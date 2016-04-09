@@ -250,11 +250,11 @@ class Scheduler(Server):
 
     def identity(self, stream):
         """ Basic information about ourselves and our cluster """
-        d = {'type': type(self).__name__,
-             'id': str(self.id),
-             'workers': list(self.ncores),
-             'services': {key: v.port for (key, v) in self.services.items()},
-             'workers': dict(self.worker_info)}
+        d = {u'type': type(self).__name__,
+             u'id': str(self.id),
+             u'workers': list(self.ncores),
+             u'services': {key: v.port for (key, v) in self.services.items()},
+             u'workers': dict(self.worker_info)}
         return d
 
     def put(self, msg):
@@ -413,11 +413,11 @@ class Scheduler(Server):
 
         self.release_live_dependencies(key)
 
-        msg = {'op': 'key-in-memory',
-               'key': key,
-               'workers': list(workers)}
+        msg = {u'op': u'key-in-memory',
+               u'key': key,
+               u'workers': list(workers)}
         if type:
-            msg['type'] = type
+            msg[u'type'] = type
         self.report(msg)
 
         for plugin in self.plugins:
@@ -529,10 +529,10 @@ class Scheduler(Server):
         if key in self.exceptions_blame:
             return
         self.exceptions_blame[key] = failing_key
-        self.report({'op': 'task-erred',
-                     'key': key,
-                     'exception': self.exceptions[failing_key],
-                     'traceback': self.tracebacks[failing_key]})
+        self.report({u'op': u'task-erred',
+                     u'key': key,
+                     u'exception': self.exceptions[failing_key],
+                     u'traceback': self.tracebacks[failing_key]})
         if key in self.waiting:
             del self.waiting[key]
 
@@ -639,8 +639,8 @@ class Scheduler(Server):
                               callback_time=self.heartbeat_interval,
                               io_loop=self.loop)
         self.loop.add_callback(pc.start)
-        d['heartbeat'] = pc
-        d['heartbeat-port'] = port
+        d[u'heartbeat'] = pc
+        d[u'heartbeat-port'] = port
 
     def remove_worker(self, stream=None, address=None):
         """ Mark that a worker no longer seems responsive
@@ -683,7 +683,7 @@ class Scheduler(Server):
             s.remove(address)
             if not s:
                 self.who_has.pop(key)
-                self.report({'op': 'lost-data', 'key': key})
+                self.report({u'op': u'lost-data', u'key': key})
                 missing.add(key)
 
         for key in missing:
@@ -695,7 +695,7 @@ class Scheduler(Server):
         if not self.stacks:
             logger.critical("Lost all workers")
 
-        return 'OK'
+        return u'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
                    name=None, coerce_address=True, **info):
@@ -703,7 +703,7 @@ class Scheduler(Server):
             address = self.coerce_address(address)
         name = name or address
         if name in self.aliases:
-            return 'name taken, %s' % name
+            return u'name taken, %s' % name
 
         if coerce_address:
             host, port = self.coerce_address(address).split(':')
@@ -739,7 +739,7 @@ class Scheduler(Server):
         self.ensure_occupied(address)
 
         logger.info("Register %s", str(address))
-        return 'OK'
+        return u'OK'
 
     def ensure_in_play(self, key):
         """ Ensure that a key is on track to enter memory in the future
@@ -950,7 +950,7 @@ class Scheduler(Server):
             for dep in list(self.dependents[key]):
                 self.cancel_key(dep, client)
         logger.debug("Scheduler cancels key %s", key)
-        self.report({'op': 'cancelled-key', 'key': key})
+        self.report({u'op': u'cancelled-key', u'key': key})
         self.client_releases_keys(keys=[key], client=client)
 
     def cancel(self, stream, keys=None, client=None):
@@ -1007,7 +1007,7 @@ class Scheduler(Server):
             yield self.handle_messages(stream, bstream, client=client)
         finally:
             if not stream.closed():
-                bstream.send({'op': 'stream-closed'})
+                bstream.send({u'op': u'stream-closed'})
                 yield bstream.close(ignore_closed=True)
             del self.streams[client]
             logger.info("Close connection to %s, %s", type(self).__name__,
@@ -1041,7 +1041,7 @@ class Scheduler(Server):
                 put = report.send
             else:
                 put = lambda msg: None
-            put({'op': 'stream-start'})
+            put({u'op': u'stream-start'})
 
             breakout = False
 
@@ -1052,7 +1052,7 @@ class Scheduler(Server):
                     break
                 except Exception as e:
                     logger.exception(e)
-                    put(error_message(e, status='scheduler-error'))
+                    put(error_message(e, status=u'scheduler-error'))
                     continue
 
                 if not isinstance(msgs, list):
@@ -1064,7 +1064,7 @@ class Scheduler(Server):
                         op = msg.pop('op')
                     except Exception as e:
                         logger.exception(e)
-                        put(error_message(e, status='scheduler-error'))
+                        put(error_message(e, status=u'scheduler-error'))
 
                     if op == 'close-stream':
                         breakout = True
@@ -1094,14 +1094,14 @@ class Scheduler(Server):
             logger.debug('Finished scheduling coroutine')
 
     def send_task_to_worker(self, ident, key):
-        msg = {'op': 'compute-task',
-               'key': key,
-               'who_has': {dep: list(self.who_has[dep])
+        msg = {u'op': u'compute-task',
+               u'key': key,
+               u'who_has': {dep: list(self.who_has[dep])
                            for dep in self.dependencies[key]}}
         if isinstance(self.tasks[key], dict):
             msg.update(self.tasks[key])
         else:
-            msg['task'] = self.tasks[key]
+            msg[u'task'] = self.tasks[key]
 
         self.worker_streams[ident].send(msg)
 
@@ -1122,7 +1122,7 @@ class Scheduler(Server):
         yield gen.sleep(0)
         ip, port = coerce_to_address(ident, out=tuple)
         stream = yield connect(ip, port)
-        yield write(stream, {'op': 'compute-stream'})
+        yield write(stream, {u'op': u'compute-stream'})
         self.worker_streams[ident].start(stream)
         logger.info("Starting worker compute stream, %s", ident)
 
@@ -1178,7 +1178,7 @@ class Scheduler(Server):
                 logger.debug("Remove %d keys from worker %s", len(keys), worker)
             yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
 
-        raise Return('OK')
+        raise Return(u'OK')
 
     def delete_data(self, stream=None, keys=None):
         with log_errors():
@@ -1219,9 +1219,9 @@ class Scheduler(Server):
         end_time = time()
         last_seen = datetime.now()
 
-        d['latency'] = end - start
-        d['last-seen'] = last_seen
-        d['time-delay'] = (end_time + start_time) / 2 - d['time']
+        d[u'latency'] = end - start
+        d[u'last-seen'] = last_seen
+        d[u'time-delay'] = (end_time + start_time) / 2 - d['time']
 
         self.host_info[host].update(d)
 
@@ -1257,10 +1257,10 @@ class Scheduler(Server):
 
         try:
             data = yield gather_from_workers(who_has, deserialize=False)
-            result = {'status': 'OK', 'data': data}
+            result = {u'status': u'OK', u'data': data}
         except KeyError as e:
             logger.debug("Couldn't gather keys %s", e)
-            result = {'status': 'error', 'keys': e.args}
+            result = {u'status': u'error', u'keys': e.args}
 
         raise gen.Return(result)
 
@@ -1300,7 +1300,7 @@ class Scheduler(Server):
 
         logger.debug("All workers reporting in")
 
-        self.report({'op': 'restart'})
+        self.report({u'op': u'restart'})
         for plugin in self.plugins[:]:
             try:
                 plugin.restart(self)
@@ -1409,8 +1409,8 @@ class Scheduler(Server):
             keys = set(keys or self.who_has)
             workers = set(workers or self.ncores)
             if not keys.issubset(self.who_has):
-                raise Return({'status': 'missing-data',
-                              'keys': list(keys - set(self.who_has))})
+                raise Return({u'status': u'missing-data',
+                              u'keys': list(keys - set(self.who_has))})
 
             workers_by_key = {k: self.who_has[k] & workers for k in keys}
             keys_by_worker = {w: set() for w in workers}
@@ -1458,8 +1458,8 @@ class Scheduler(Server):
                             for r, v in to_recipients.items()}
 
             if not all(r['status'] == 'OK' for r in result.values()):
-                raise Return({'status': 'missing-data',
-                              'keys': sum([r['keys'] for r in result
+                raise Return({u'status': u'missing-data',
+                              u'keys': sum([r['keys'] for r in result
                                                      if 'keys' in r], [])})
 
             for sender, recipient, key in msgs:
@@ -1473,7 +1473,7 @@ class Scheduler(Server):
                 self.who_has[key].remove(sender)
                 self.has_what[sender].remove(key)
 
-            raise Return({'status': 'OK'})
+            raise Return({u'status': u'OK'})
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions,

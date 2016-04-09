@@ -879,7 +879,7 @@ def test_update_graph_culls(s, a, b):
 @gen_cluster(ncores=[('127.0.0.1', 2), ('127.0.0.2', 2), ('127.0.0.1', 1)])
 def test_host_health(s, a, b, c):
     start = time()
-    while any('last-seen' not in v for v in s.host_info.values()):
+    while any(u'last-seen' not in v for v in s.host_info.values()):
         yield gen.sleep(0.1)
         assert time() < start + 5
 
@@ -890,7 +890,7 @@ def test_host_health(s, a, b, c):
         assert 0 < s.host_info[w.ip]['memory']
         assert 0 < s.host_info[w.ip]['memory-percent'] < 100
 
-        assert isinstance(s.host_info[w.ip]['last-seen'], datetime)
+        assert isinstance(s.host_info[w.ip][u'last-seen'], datetime)
         assert s.host_info[w.ip]['heartbeat-port'] in s.host_info[w.ip]['ports']
         assert -1 < s.host_info[w.ip]['time-delay'] < 1
 
