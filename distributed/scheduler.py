@@ -404,6 +404,7 @@ class Scheduler(Server):
         self.maybe_ready.clear()
 
         if self.idle and self.ready:
+            import pdb; pdb.set_trace()
             if len(self.ready) < len(self.idle):
                 def keyfunc(w):
                     try:

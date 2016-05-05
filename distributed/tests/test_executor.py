@@ -2680,3 +2680,45 @@ def test_task_load_adapts_quickly_after_delay(e, s, a):
     future = e.submit(inc, 2)  # fast but soon, defers to old average
     yield _wait(future)
     assert 0.2 < s.worker_info[a.address]['avg-task-duration'] < 1
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
+def test_task_load_adapts_quickly(e, s, a):
+    future = e.submit(slowinc, 1, delay=0.2)  # slow
+    yield _wait(future)
+    assert 0.15 < s.worker_info[a.address]['avg-task-duration'] < 0.4
+
+    futures = e.map(inc, range(10))  # very fast
+    yield _wait(futures)
+
+    assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_even_load_after_fast_functions(e, s, a, b):
+    x = e.submit(inc, 1, workers=a.address)  # very fast
+    y = e.submit(inc, 2, workers=b.address)  # very fast
+    yield _wait([x, y])
+    assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
+    assert 0 < s.worker_info[b.address]['avg-task-duration'] < 0.1
+
+    futures = e.map(inc, range(2, 10))
+    yield _wait(futures)
+    assert len(a.data) == len(b.data)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_even_load_on_startup(e, s, a, b):
+    x, y = e.map(inc, [1, 2])
+    yield _wait([x, y])
+    assert len(a.data) == len(b.data) == 1
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 2)] * 2)
+def test_contiguous_load(e, s, a, b):
+    w, x, y, z = e.map(inc, [1, 2, 3, 4])
+    yield _wait([w, x, y, z])
+
+    groups = [set(a.data), set(b.data)]
+    assert {w.key, x.key} in groups
+    assert {y.key, z.key} in groups
