@@ -2647,20 +2647,20 @@ def test_executor_replicate_sync(loop):
 
 
 @gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
-def test_task_load(e, s, a):
-    assert 4 < s.task_load(a.address) < 20
+def test_tasks_per_core(e, s, a):
+    assert 1 < s.tasks_per_core(a.address) < 4
     L = e.map(inc, range(100))  # very fast
     yield _wait(L)
     assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
 
-    assert 8 <= s.task_load(a.address) < 10000
+    assert 2 <= s.tasks_per_core(a.address) < 10000
 
     L = e.map(sleep, [0.1] * 10, pure=False)
     yield _wait(L)
 
     assert 0.0001 < s.worker_info[a.address]['avg-task-duration'] < 0.2
 
-    assert 4 < s.task_load(a.address) < 100
+    assert 1 < s.tasks_per_core(a.address) < 25
 
 
 @gen_cluster(executor=True, ncores=[('127.0.0.1', 4)] * 1)
@@ -2702,7 +2702,7 @@ def test_even_load_after_fast_functions(e, s, a, b):
     assert 0 < s.worker_info[a.address]['avg-task-duration'] < 0.1
     assert 0 < s.worker_info[b.address]['avg-task-duration'] < 0.1
 
-    futures = e.map(inc, range(2, 10))
+    futures = e.map(inc, range(2, 11))
     yield _wait(futures)
     assert len(a.data) == len(b.data)
 

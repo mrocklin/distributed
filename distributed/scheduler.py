@@ -13,7 +13,7 @@ try:
     from cytoolz import frequencies, topk
 except ImportError:
     from toolz import frequencies, topk
-from toolz import memoize, valmap, first, second
+from toolz import memoize, valmap, first, second, unique
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -380,7 +380,7 @@ class Scheduler(Server):
                 # self.ensure_occupied(new_worker)
         else:
             self.ready.appendleft(key)
-            self.ensure_idle_ready()
+            # self.ensure_idle_ready()
 
     def ensure_idle_ready(self):
         """ Run ready tasks on idle workers
@@ -404,7 +404,6 @@ class Scheduler(Server):
         self.maybe_ready.clear()
 
         if self.idle and self.ready:
-            import pdb; pdb.set_trace()
             if len(self.ready) < len(self.idle):
                 def keyfunc(w):
                     try:
@@ -954,7 +953,7 @@ class Scheduler(Server):
             if k in self.tasks:
                 del tasks[k]
 
-        keys = set(keys)
+        keys = set(unique(keys))
         for k in keys:
             self.who_wants[k].add(client)
             self.wants_what[client].add(k)
