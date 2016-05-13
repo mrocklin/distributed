@@ -293,8 +293,8 @@ class Worker(Server):
                 other = yield gather_from_workers(who_has)
                 diagnostics['transfer_stop'] = time()
                 self.data.update(other)
-                yield self.center.add_keys(address=self.address,
-                                           keys=list(other))
+                self.loop.add_callback(self.center.add_keys,
+                        address=self.address, keys=list(other))
                 data.update(other)
             except KeyError as e:
                 logger.warn("Could not find data for %s", key)
