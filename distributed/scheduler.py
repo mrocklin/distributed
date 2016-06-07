@@ -60,9 +60,9 @@ class Scheduler(Server):
 
         $ dscheduler 127.0.0.1:8787  # address of center
 
-    Or as part of when an Executor starts up and connects to a Center::
+    Or as part of when an Content starts up and connects to a Center::
 
-        >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
+        >>> e = Content('127.0.0.1:8787')  # doctest: +SKIP
         >>> e.scheduler  # doctest: +SKIP
         Scheduler(...)
 
@@ -1083,7 +1083,7 @@ class Scheduler(Server):
                      loose_restrictions=None):
         """ Add new computations to the internal dask graph
 
-        This happens whenever the Executor calls submit, map, get, or compute.
+        This happens whenever the Content calls submit, map, get, or compute.
         """
         for k in list(tasks):
             if tasks[k] is k:

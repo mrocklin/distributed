@@ -49,9 +49,9 @@ class Future(WrappedKey):
     Examples
     --------
 
-    Futures typically emerge from Executor computations
+    Futures typically emerge from Client computations
 
-    >>> my_future = executor.submit(add, 1, 2)  # doctest: +SKIP
+    >>> my_future = client.submit(add, 1, 2)  # doctest: +SKIP
 
     We can track the progress and results of a future
 
@@ -64,26 +64,30 @@ class Future(WrappedKey):
 
     See Also
     --------
-    Executor:  Creates futures
+    Client:  Creates futures
     """
-    def __init__(self, key, executor):
+    def __init__(self, key, client):
         self.key = key
-        self.executor = executor
-        self.executor._inc_ref(key)
+        self.client = client
+        self.client._inc_ref(key)
 
-        if key not in executor.futures:
-            executor.futures[key] = {'event': Event(), 'status': 'pending'}
+        if key not in client.futures:
+            client.futures[key] = {'event': Event(), 'status': 'pending'}
+
+    @property
+    def executor(self):
+        return self.client
 
     @property
     def status(self):
         try:
-            return self.executor.futures[self.key]['status']
+            return self.client.futures[self.key]['status']
         except KeyError:
             return 'cancelled'
 
     @property
     def event(self):
-        return self.executor.futures[self.key]['event']
+        return self.client.futures[self.key]['event']
 
     def done(self):
         """ Is the computation complete? """
@@ -91,7 +95,7 @@ class Future(WrappedKey):
 
     def result(self):
         """ Wait until computation completes. Gather result to local process """
-        result = sync(self.executor.loop, self._result, raiseit=False)
+        result = sync(self.client.loop, self._result, raiseit=False)
         if self.status == 'error':
             six.reraise(*result)
         if self.status == 'cancelled':
@@ -102,7 +106,7 @@ class Future(WrappedKey):
     @gen.coroutine
     def _result(self, raiseit=True):
         try:
-            d = self.executor.futures[self.key]
+            d = self.client.futures[self.key]
         except KeyError:
             exception = CancelledError(self.key)
             if raiseit:
@@ -117,14 +121,14 @@ class Future(WrappedKey):
             else:
                 raise Return(clean_exception(**d))
         else:
-            result = yield self.executor._gather([self])
+            result = yield self.client._gather([self])
             raise gen.Return(result[0])
 
     @gen.coroutine
     def _exception(self):
         yield self.event.wait()
         if self.status == 'error':
-            exception = self.executor.futures[self.key]['exception']
+            exception = self.client.futures[self.key]['exception']
             raise Return(exception)
         else:
             raise Return(None)
@@ -136,21 +140,21 @@ class Future(WrappedKey):
         --------
         Future.traceback
         """
-        return sync(self.executor.loop, self._exception)
+        return sync(self.client.loop, self._exception)
 
     def cancel(self):
         """ Returns True if the future has been cancelled """
-        return self.executor.cancel([self])
+        return self.client.cancel([self])
 
     def cancelled(self):
         """ Returns True if the future has been cancelled """
-        return self.key not in self.executor.futures
+        return self.key not in self.client.futures
 
     @gen.coroutine
     def _traceback(self):
         yield self.event.wait()
         if self.status == 'error':
-            raise Return(self.executor.futures[self.key]['traceback'])
+            raise Return(self.client.futures[self.key]['traceback'])
         else:
             raise Return(None)
 
@@ -172,17 +176,17 @@ class Future(WrappedKey):
         --------
         Future.exception
         """
-        return sync(self.executor.loop, self._traceback)
+        return sync(self.client.loop, self._traceback)
 
     @property
     def type(self):
         try:
-            return self.executor.futures[self.key]['type']
+            return self.client.futures[self.key]['type']
         except KeyError:
             return None
 
     def __del__(self):
-        self.executor._dec_ref(self.key)
+        self.client._dec_ref(self.key)
 
     def __str__(self):
         if self.type:
@@ -203,7 +207,7 @@ def normalize_future(f):
     return [f.key, type(f)]
 
 
-class Executor(object):
+class Client(object):
     """ Drive computations on a distributed cluster
 
     The Executor connects users to a distributed compute cluster.  It provides
@@ -222,20 +226,20 @@ class Executor(object):
     --------
     Provide cluster's head node address on initialization:
 
-    >>> executor = Executor('127.0.0.1:8787')  # doctest: +SKIP
+    >>> client = Client('127.0.0.1:8787')  # doctest: +SKIP
 
     Use ``submit`` method to send individual computations to the cluster
 
-    >>> a = executor.submit(add, 1, 2)  # doctest: +SKIP
-    >>> b = executor.submit(add, 10, 20)  # doctest: +SKIP
+    >>> a = client.submit(add, 1, 2)  # doctest: +SKIP
+    >>> b = client.submit(add, 10, 20)  # doctest: +SKIP
 
     Continue using submit or map on results to build up larger computations
 
-    >>> c = executor.submit(add, a, b)  # doctest: +SKIP
+    >>> c = client.submit(add, a, b)  # doctest: +SKIP
 
     Gather results with the ``gather`` method.
 
-    >>> executor.gather([c])  # doctest: +SKIP
+    >>> client.gather([c])  # doctest: +SKIP
     33
 
     See Also
@@ -257,11 +261,11 @@ class Executor(object):
     def __str__(self):
         if hasattr(self, '_loop_thread'):
             n = sync(self.loop, self.scheduler.ncores)
-            return '<Executor: scheduler=%s:%d processes=%d cores=%d>' % (
+            return '<Client: scheduler=%s:%d processes=%d cores=%d>' % (
                     self.scheduler.ip, self.scheduler.port, len(n),
                     sum(n.values()))
         else:
-            return '<Executor: scheduler=%s:%d>' % (
+            return '<Client: scheduler=%s:%d>' % (
                     self.scheduler.ip, self.scheduler.port)
 
     __repr__ = __str__
@@ -352,7 +356,7 @@ class Executor(object):
 
                 breakout = False
                 for msg in msgs:
-                    logger.debug("Executor receives message %s", msg)
+                    logger.debug("Client receives message %s", msg)
 
                     if msg['op'] == 'stream-start':
                         start_event.set()
@@ -449,7 +453,7 @@ class Executor(object):
 
         Examples
         --------
-        >>> c = executor.submit(add, a, b)  # doctest: +SKIP
+        >>> c = client.submit(add, a, b)  # doctest: +SKIP
 
         Returns
         -------
@@ -457,7 +461,7 @@ class Executor(object):
 
         See Also
         --------
-        Executor.map: Submit on many arguments at once
+        Client.map: Submit on many arguments at once
         """
         if not callable(func):
             raise TypeError("First input to submit must be a callable function")
@@ -551,7 +555,7 @@ class Executor(object):
 
         Examples
         --------
-        >>> L = executor.map(func, sequence)  # doctest: +SKIP
+        >>> L = client.map(func, sequence)  # doctest: +SKIP
 
         Returns
         -------
@@ -560,7 +564,7 @@ class Executor(object):
 
         See also
         --------
-        Executor.submit: Submit a single function
+        Client.submit: Submit a single function
         """
         if not callable(func):
             raise TypeError("First input to map must be a callable function")
@@ -710,7 +714,7 @@ class Executor(object):
         Examples
         --------
         >>> from operator import add  # doctest: +SKIP
-        >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
+        >>> e = Client('127.0.0.1:8787')  # doctest: +SKIP
         >>> x = e.submit(add, 1, 2)  # doctest: +SKIP
         >>> e.gather(x)  # doctest: +SKIP
         3
@@ -723,7 +727,7 @@ class Executor(object):
 
         See Also
         --------
-        Executor.scatter: Send data out to cluster
+        Client.scatter: Send data out to cluster
         """
         if isqueue(futures):
             qout = pyQueue(maxsize=maxsize)
@@ -815,7 +819,7 @@ class Executor(object):
 
         Examples
         --------
-        >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
+        >>> e = Client('127.0.0.1:8787')  # doctest: +SKIP
         >>> e.scatter([1, 2, 3])  # doctest: +SKIP
         [<Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>,
          <Future: status: finished, key: 58e78e1b34eb49a68c65b54815d1b158>,
@@ -839,7 +843,7 @@ class Executor(object):
 
         See Also
         --------
-        Executor.gather: Gather data back to local process
+        Client.gather: Gather data back to local process
         """
         if isqueue(data) or isinstance(data, Iterator):
             logger.debug("Starting thread for streaming data")
@@ -987,13 +991,13 @@ class Executor(object):
         Examples
         --------
         >>> from operator import add  # doctest: +SKIP
-        >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
+        >>> e = Client('127.0.0.1:8787')  # doctest: +SKIP
         >>> e.get({'x': (add, 1, 2)}, 'x')  # doctest: +SKIP
         3
 
         See Also
         --------
-        Executor.compute: Compute asynchronous collections
+        Client.compute: Compute asynchronous collections
         """
         status, result = sync(self.loop, self._get, dsk, keys,
                               raise_on_error=False, **kwargs)
@@ -1023,7 +1027,7 @@ class Executor(object):
         >>> from operator import add
         >>> x = dask.do(add)(1, 2)
         >>> y = dask.do(add)(x, x)
-        >>> xx, yy = executor.compute([x, y])  # doctest: +SKIP
+        >>> xx, yy = client.compute([x, y])  # doctest: +SKIP
         >>> xx  # doctest: +SKIP
         <Future: status: finished, key: add-8f6e709446674bad78ea8aeecfee188e>
         >>> xx.result()  # doctest: +SKIP
@@ -1033,11 +1037,11 @@ class Executor(object):
 
         Also support single arguments
 
-        >>> xx = executor.compute(x)  # doctest: +SKIP
+        >>> xx = client.compute(x)  # doctest: +SKIP
 
         See Also
         --------
-        Executor.get: Normal synchronous dask.get function
+        Client.get: Normal synchronous dask.get function
         """
         if isinstance(args, (list, tuple, set, frozenset)):
             singleton = False
@@ -1104,12 +1108,12 @@ class Executor(object):
 
         Examples
         --------
-        >>> xx = executor.persist(x)  # doctest: +SKIP
-        >>> xx, yy = executor.persist([x, y])  # doctest: +SKIP
+        >>> xx = client.persist(x)  # doctest: +SKIP
+        >>> xx, yy = client.persist([x, y])  # doctest: +SKIP
 
         See Also
         --------
-        Executor.compute
+        Client.compute
         """
         if isinstance(collections, (tuple, list, set, frozenset)):
             singleton = False
@@ -1196,7 +1200,7 @@ class Executor(object):
 
         Examples
         --------
-        >>> executor.upload_file('mylibrary.egg')  # doctest: +SKIP
+        >>> client.upload_file('mylibrary.egg')  # doctest: +SKIP
         >>> from mylibrary import myfunc  # doctest: +SKIP
         >>> L = e.map(myfunc, seq)  # doctest: +SKIP
         """
@@ -1273,7 +1277,7 @@ class Executor(object):
 
         See also
         --------
-        Executor.rebalance
+        Client.rebalance
         """
         sync(self.loop, self._replicate, futures, n=n, workers=workers,
                 branching_factor=branching_factor)
@@ -1297,8 +1301,8 @@ class Executor(object):
 
         See Also
         --------
-        Executor.who_has
-        Executor.has_what
+        Client.who_has
+        Client.has_what
         """
         if (isinstance(workers, tuple)
             and all(isinstance(i, (str, tuple)) for i in workers)):
@@ -1329,8 +1333,8 @@ class Executor(object):
 
         See Also
         --------
-        Executor.has_what
-        Executor.ncores
+        Client.has_what
+        Client.ncores
         """
         if futures is not None:
             futures = futures_of(futures)
@@ -1357,8 +1361,8 @@ class Executor(object):
 
         See Also
         --------
-        Executor.who_has
-        Executor.ncores
+        Client.who_has
+        Client.ncores
         """
         if (isinstance(workers, tuple)
             and all(isinstance(i, (str, tuple)) for i in workers)):
@@ -1393,16 +1397,16 @@ class Executor(object):
 
         See Also
         --------
-        Executor.who_has
+        Client.who_has
         """
         return sync(self.loop, self.scheduler.nbytes, keys=keys,
                     summary=summary)
 
 
-class CompatibleExecutor(Executor):
+class CompatibleExecutor(Client):
     """ A concurrent.futures-compatible Executor
 
-    A subclass of Executor that conforms to concurrent.futures API,
+    A subclass of Client that conforms to concurrent.futures API,
     allowing swapping in for other Executors.
     """
 
@@ -1416,7 +1420,7 @@ class CompatibleExecutor(Executor):
 
         See Also
         --------
-        Executor.map: for more info
+        Client.map: for more info
         """
         list_of_futures = super(CompatibleExecutor, self).map(
                                 func, *iterables, **kwargs)
@@ -1452,8 +1456,8 @@ def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
     -------
     Named tuple of completed, not completed
     """
-    executor = default_executor()
-    result = sync(executor.loop, _wait, fs, timeout, return_when)
+    client = default_executor()
+    result = sync(client.loop, _wait, fs, timeout, return_when)
     return result
 
 
@@ -1494,10 +1498,10 @@ def as_completed(fs):
 
     This function does not return futures in the order in which they are input.
     """
-    if len(set(f.executor for f in fs)) == 1:
-        loop = first(fs).executor.loop
+    if len(set(f.client for f in fs)) == 1:
+        loop = first(fs).client.loop
     else:
-        # TODO: Groupby executor, spawn many _as_completed coroutines
+        # TODO: Groupby client, spawn many _as_completed coroutines
         raise NotImplementedError(
         "as_completed on many event loops not yet supported")
 
@@ -1517,16 +1521,16 @@ def default_executor(e=None):
     if _global_executor[0]:
         return _global_executor[0]
     else:
-        raise ValueError("No executors found\n"
-                "Start an executor and point it to the scheduler address\n"
-                "  from distributed import Executor\n"
-                "  executor = Executor('ip-addr-of-scheduler:8786')\n")
+        raise ValueError("No clients found\n"
+                "Start an client and point it to the scheduler address\n"
+                "  from distributed import Client\n"
+                "  executor = Client('ip-addr-of-scheduler:8786')\n")
 
 
-def ensure_default_get(executor):
-    if _globals['get'] != executor.get:
+def ensure_default_get(client):
+    if _globals['get'] != client.get:
         print("Setting global dask scheduler to use distributed")
-        dask.set_options(get=executor.get)
+        dask.set_options(get=client.get)
 
 
 def redict_collection(c, dsk):
