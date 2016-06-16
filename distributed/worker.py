@@ -486,7 +486,7 @@ class Worker(Server):
                     "Function: %s\n"
                     "args:     %s\n"
                     "kwargs:   %s\n",
-                    str(funcname(function))[:1000], 
+                    str(funcname(function))[:1000],
                     convert_args_to_str(args, max_len=1000),
                     convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
@@ -538,7 +538,7 @@ class Worker(Server):
                 "Function: %s\n"
                 "args:     %s\n"
                 "kwargs:   %s\n",
-                str(funcname(function))[:1000], 
+                str(funcname(function))[:1000],
                 convert_args_to_str(args, max_len=1000),
                 convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
@@ -563,7 +563,7 @@ class Worker(Server):
                 "Function: %s\n"
                 "args:     %s\n"
                 "kwargs:   %s\n",
-                str(funcname(function))[:1000], 
+                str(funcname(function))[:1000],
                 convert_args_to_str(args, max_len=1000),
                 convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
