@@ -3463,3 +3463,29 @@ def test_reconnect(loop):
 
     e.shutdown()
     sync(loop, w._close)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 5)
+def test_hold_onto_intermediates(e, s, *workers):
+    [x] = yield e._scatter([1])
+    future = e.submit(slowadd, x, 1, delay=0.01)  # learn should steal slowadd
+    yield _wait(future)
+
+    futures = [e.submit(slowadd, x, i, delay=0.01) for i in range(2, 20)]
+    yield _wait(futures)
+
+    assert all(x.key in w.data for w in workers)
+
+
+@gen_cluster(executor=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_dont_hold_onto_intermediates(e, s, *workers):
+    [x] = yield e._scatter([1])
+    future = e.submit(slowadd, x, 1, delay=0.01)  # learn should steal slowadd
+    yield _wait(future)
+
+    futures = [e.submit(slowadd, x, i, delay=0.01) for i in range(2, 12)]
+    yield _wait(futures)
+
+    import pdb; pdb.set_trace()
+    assert not all(x.key in w.data for w in workers)
+    assert 1 < len(s.who_has[x.key]) < 10

@@ -991,6 +991,7 @@ class Scheduler(Server):
         if deps:
             msg['who_has'] = {dep: tuple(self.who_has.get(dep, ()))
                               for dep in deps}
+            msg['keep'] = [dep for dep in deps if self.should_replicate(dep)]
 
         task = self.tasks[key]
         if type(task) is dict:
@@ -999,6 +1000,16 @@ class Scheduler(Server):
             msg['task'] = task
 
         self.worker_streams[worker].send(msg)
+
+    def should_replicate(self, key):
+        deps = self.waiting_data[key]
+        nhas = len(self.who_has.get(key, ()))
+        if len(deps) <= nhas:
+            return False
+        elif len(deps) < 100:
+            deps = {d for d in deps if d not in self.rprocessing}
+            return len(deps) <= nhas
+        return True
 
     @gen.coroutine
     def worker_stream(self, worker):

@@ -296,25 +296,29 @@ class Worker(Server):
         data: The scope in which to run tasks
         len(remote): the number of new keys we've gathered
         """
-        who_has = merge(msg['who_has'] for msg in msgs if 'who_has' in msg)
-        local = {k: self.data[k] for k in who_has if k in self.data}
-        who_has = {k: v for k, v in who_has.items() if k not in local}
-        remote, bad_data = yield gather_from_workers(who_has,
-                permissive=True, rpc=self.rpc, close=False)
-        if remote:
-            self.data.update(remote)
-            yield self.scheduler.add_keys(address=self.address, keys=list(remote))
+        with log_errors():
+            who_has = merge(msg['who_has'] for msg in msgs if 'who_has' in msg)
+            local = {k: self.data[k] for k in who_has if k in self.data}
+            who_has = {k: v for k, v in who_has.items() if k not in local}
+            remote, bad_data = yield gather_from_workers(who_has,
+                    permissive=True, rpc=self.rpc, close=False)
+            if remote:
+                keep = set(k for msg in msgs for k in msg.get('keep', ()))
+                print('KEEP', keep)
+                keep = {k: remote[k] for k in remote if k in keep}
+                self.data.update(keep)
+                yield self.scheduler.add_keys(address=self.address, keys=list(keep))
 
-        data = merge(local, remote)
+            data = merge(local, remote)
 
-        if bad_data:
-            missing = {msg['key']: {k for k in msg['who_has'] if k in bad_data}
-                        for msg in msgs if 'who_has' in msg}
-            bad = {k: v for k, v in missing.items() if v}
-            good = [msg for msg in msgs if not missing.get(msg['key'])]
-        else:
-            good, bad = msgs, {}
-        raise Return([good, bad, data, len(remote)])
+            if bad_data:
+                missing = {msg['key']: {k for k in msg['who_has'] if k in bad_data}
+                            for msg in msgs if 'who_has' in msg}
+                bad = {k: v for k, v in missing.items() if v}
+                good = [msg for msg in msgs if not missing.get(msg['key'])]
+            else:
+                good, bad = msgs, {}
+            raise Return([good, bad, data, len(remote)])
 
     @gen.coroutine
     def _ready_task(self, function=None, key=None, args=(), kwargs={},
@@ -430,36 +434,37 @@ class Worker(Server):
 
     @gen.coroutine
     def compute_many(self, bstream, msgs, report=False):
-        transfer_start = time()
-        good, bad, data, num_transferred = yield self.gather_many(msgs)
-        transfer_end = time()
+        with log_errors():
+            transfer_start = time()
+            good, bad, data, num_transferred = yield self.gather_many(msgs)
+            transfer_end = time()
 
-        for msg in msgs:
-            msg.pop('who_has', None)
+            for msg in msgs:
+                msg.pop('who_has', None)
 
-        if bad:
-            logger.warn("Could not find data for %s", sorted(bad))
-        for k, v in bad.items():
-            bstream.send({'status': 'missing-data',
-                          'key': k,
-                          'keys': list(v)})
+            if bad:
+                logger.warn("Could not find data for %s", sorted(bad))
+            for k, v in bad.items():
+                bstream.send({'status': 'missing-data',
+                              'key': k,
+                              'keys': list(v)})
 
-        if good:
-            futures = [self.compute_one(data, report=report, **msg)
-                                     for msg in good]
-            wait_iterator = gen.WaitIterator(*futures)
-            result = yield wait_iterator.next()
-            if num_transferred:
-                result['transfer_start'] = transfer_start
-                result['transfer_stop'] = transfer_end
-            bstream.send(result)
-            while not wait_iterator.done():
-                msg = yield wait_iterator.next()
-                bstream.send(msg)
+            if good:
+                futures = [self.compute_one(data, report=report, **msg)
+                                         for msg in good]
+                wait_iterator = gen.WaitIterator(*futures)
+                result = yield wait_iterator.next()
+                if num_transferred:
+                    result['transfer_start'] = transfer_start
+                    result['transfer_stop'] = transfer_end
+                bstream.send(result)
+                while not wait_iterator.done():
+                    msg = yield wait_iterator.next()
+                    bstream.send(msg)
 
     @gen.coroutine
     def compute_one(self, data, key=None, function=None, args=None, kwargs=None,
-                    report=False, task=None):
+                    report=False, task=None, keep=None):
         logger.debug("Compute one on %s", key)
         diagnostics = dict()
         try:
