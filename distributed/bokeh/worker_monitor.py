@@ -12,7 +12,7 @@ with ignoring(ImportError):
         ColumnDataSource, DataRange1d, Range1d, NumeralTickFormatter, ToolbarBox,
     )
     from bokeh.palettes import Spectral9, Viridis4
-    from bokeh.models import HoverTool
+    from bokeh.models import HoverTool, Paragraph
     from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
     from bokeh.plotting import figure, vplot
 
@@ -150,11 +150,13 @@ def worker_table_plot(**kwargs):
                 table.columns[cnames.index(name)].formatter = formatters[name]
 
         x_range = Range1d(0, 1)
-        mem_plot = figure(tools='', height=70, width=600, x_range=x_range)
+        mem_plot = figure(tools='box_select', height=70, width=600,
+                x_range=x_range, toolbar_location=None)
         mem_plot.circle(source=source, x='memory_percent', y=0, size=10)
         mem_plot.yaxis.visible = False
         mem_plot.xaxis.minor_tick_line_width = 0
         mem_plot.ygrid.visible = False
+        mem_plot.xaxis.minor_tick_line_alpha = 0
 
         hover = HoverTool()
         mem_plot.add_tools(hover)
@@ -167,7 +169,19 @@ def worker_table_plot(**kwargs):
         """
         hover.point_policy = 'follow_mouse'
 
-    return source, table, mem_plot
+        paragraph = Paragraph(text='', height=200)
+
+        def f(_, old, new):
+            host = source.data['host']
+            text = 'Hosts: ' + ', '.join(
+                    [host[i] for i in new['1d']['indices']])
+            paragraph.text = text
+
+        source.on_change('selected', f)
+
+        plot = vplot(mem_plot, paragraph, table)
+
+    return source, plot
 
 
 def worker_table_update(source, d):

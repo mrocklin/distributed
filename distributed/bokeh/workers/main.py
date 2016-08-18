@@ -16,7 +16,8 @@ WIDTH = 600
 messages = distributed.bokeh.messages  # global message store
 doc = curdoc()
 
-source, table, mem_plot = worker_table_plot(width=WIDTH)
+
+source, plot = worker_table_plot(width=WIDTH)
 def worker_update():
     with log_errors():
         try:
@@ -28,8 +29,7 @@ doc.add_periodic_callback(worker_update, messages['workers']['interval'])
 
 
 layout = column(
-    table,
-    mem_plot,
+    plot,
     sizing_mode=SIZING_MODE
 )
 doc.add_root(layout)

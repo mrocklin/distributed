@@ -67,7 +67,7 @@ def test_worker_table(s, a, b):
     while any('last-seen' not in v for v in s.host_info.values()):
         yield gen.sleep(0.01)
     data = workers(s)
-    source, table, mem_plot = worker_table_plot()
+    source, plot = worker_table_plot()
     worker_table_update(source, data)
 
     assert source.data['host'] == ['127.0.0.1']
