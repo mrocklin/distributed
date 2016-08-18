@@ -22,11 +22,11 @@ def test_resource_monitor_plot(s, a, b):
 
     times_buffer = [1000, 1001, 1003]
     workers_buffer = [{},
-                      {'10.10.20.86': {'cpu': 15.9, 'memory-percent': 63.0}},
-                      {'10.10.20.86': {'cpu': 14.9, 'memory-percent': 64.0,
+                      {'10.10.20.86': {'cpu': 15.9, 'memory_percent': 63.0}},
+                      {'10.10.20.86': {'cpu': 14.9, 'memory_percent': 64.0,
                                        'network-send': 2**16,
                                        'network-recv': 2**15},
-                       '10.10.20.87': {'cpu': 13.9, 'memory-percent': 64.0,
+                       '10.10.20.87': {'cpu': 13.9, 'memory_percent': 64.0,
                                        'network-send': 2**17,
                                        'network-recv': 2**16}}]
 
@@ -41,7 +41,7 @@ def test_resource_monitor_plot(s, a, b):
     assert source.data['times'][0] == ['null', 1001000, 1003000]
     assert source.data['times'][1] == ['null','null', 1003000]
     assert len(source.data['times']) == 2
-    assert len(source.data['memory-percent']) == 2
+    assert len(source.data['memory_percent']) == 2
 
     assert len(source.data['network-send']) == 2
     assert source.data['network-send'][1] == ['null', 'null', 2**17]
@@ -50,15 +50,15 @@ def test_resource_monitor_plot(s, a, b):
 
 
 def test_resource_append():
-    lists = {'time': [], 'cpu': [], 'memory-percent': [],
+    lists = {'time': [], 'cpu': [], 'memory_percent': [],
              'network-send': [], 'network-recv': []}
-    msg = {'10.10.20.86': {'cpu': 10, 'memory-percent': 50, 'time': 2000,
+    msg = {'10.10.20.86': {'cpu': 10, 'memory_percent': 50, 'time': 2000,
                            'network-send': 2**16, 'network-recv': 2**15},
-           '10.10.20.87': {'cpu': 30, 'memory-percent': 70, 'time': 1000,
+           '10.10.20.87': {'cpu': 30, 'memory_percent': 70, 'time': 1000,
                            'network-send': 2**17, 'network-recv': 2**16}}
 
     resource_append(lists, msg)
-    assert lists == {'time': [1500000], 'cpu': [0.2], 'memory-percent': [0.6],
+    assert lists == {'time': [1500000], 'cpu': [0.2], 'memory_percent': [0.6],
                      'network-send': [0.1875], 'network-recv': [0.09375]}
 
 
@@ -67,7 +67,7 @@ def test_worker_table(s, a, b):
     while any('last-seen' not in v for v in s.host_info.values()):
         yield gen.sleep(0.01)
     data = workers(s)
-    source, plot = worker_table_plot()
+    source, table, mem_plot = worker_table_plot()
     worker_table_update(source, data)
 
-    assert source.data['workers'] == ['127.0.0.1']
+    assert source.data['host'] == ['127.0.0.1']
