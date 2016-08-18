@@ -9,7 +9,8 @@ import datetime
 from tornado import gen
 
 from distributed.bokeh.worker_monitor import (resource_profile_plot,
-        resource_profile_update, resource_append)
+        resource_profile_update, resource_append, worker_table_plot,
+        worker_table_update)
 from distributed.diagnostics.scheduler import workers, tasks
 from distributed.utils_test import gen_cluster
 
@@ -59,3 +60,14 @@ def test_resource_append():
     resource_append(lists, msg)
     assert lists == {'time': [1500000], 'cpu': [0.2], 'memory-percent': [0.6],
                      'network-send': [0.1875], 'network-recv': [0.09375]}
+
+
+@gen_cluster()
+def test_worker_table(s, a, b):
+    while any('last-seen' not in v for v in s.host_info.values()):
+        yield gen.sleep(0.01)
+    data = workers(s)
+    source, plot = worker_table_plot()
+    worker_table_update(source, data)
+
+    assert source.data['workers'] == ['127.0.0.1']

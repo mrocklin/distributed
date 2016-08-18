@@ -12,7 +12,8 @@ with ignoring(ImportError):
         ColumnDataSource, DataRange1d, Range1d, NumeralTickFormatter, ToolbarBox,
     )
     from bokeh.palettes import Spectral9, Viridis4
-    from bokeh.plotting import figure
+    from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
+    from bokeh.plotting import figure, vplot
 
 
 def _format_resource_profile_plot(plot):
@@ -114,3 +115,57 @@ def resource_append(lists, msg):
 def mean(seq):
     seq = list(seq)
     return sum(seq) / len(seq)
+
+
+def worker_table_plot(width=600, height=400, **kwargs):
+    """ Column data source and plot for host table """
+    names = ['workers', 'cpu', 'memory-percent', 'memory', 'cores', 'processes',
+             'processing', 'latency', 'last-seen', 'disk-read', 'disk-write',
+             'network-send', 'network-recv']
+    source = ColumnDataSource({k: [] for k in names})
+
+    columns = {name: TableColumn(field=name, title=name) for name in names}
+
+    slow_names = ['workers', 'cores', 'processes', 'memory',
+                  'latency', 'last-seen']
+    slow = DataTable(source=source, columns=[columns[n] for n in slow_names],
+                     width=width, height=height, **kwargs)
+    slow.columns[3].formatter = NumberFormatter(format='0.0 b')
+    slow.columns[4].formatter = NumberFormatter(format='0.00000')
+    slow.columns[5].formatter = NumberFormatter(format='0.000')
+
+    fast_names = ['workers', 'cpu', 'memory-percent', 'processing',
+            'disk-read', 'disk-write', 'network-send', 'network-recv']
+    fast = DataTable(source=source, columns=[columns[n] for n in fast_names],
+                     width=width, height=height, **kwargs)
+    fast.columns[1].formatter = NumberFormatter(format='0.0 %')
+    fast.columns[2].formatter = NumberFormatter(format='0.0 %')
+    fast.columns[4].formatter = NumberFormatter(format='0 b')
+    fast.columns[5].formatter = NumberFormatter(format='0 b')
+    fast.columns[6].formatter = NumberFormatter(format='0 b')
+    fast.columns[7].formatter = NumberFormatter(format='0 b')
+
+    table = vplot(slow, fast)
+    return source, table
+
+
+def worker_table_update(source, d):
+    """ Update host table source """
+    workers = sorted(d)
+
+    data = {}
+    data['workers'] = workers
+    for name in ['cores', 'cpu', 'memory-percent', 'latency', 'last-seen',
+                 'memory', 'disk-read', 'disk-write', 'network-send',
+                 'network-recv']:
+        try:
+            if name in ('cpu', 'memory-percent'):
+                data[name] = [d[w][name] / 100 for w in workers]
+            else:
+                data[name] = [d[w][name] for w in workers]
+        except KeyError:
+            pass
+
+    data['processing'] = [sorted(d[w]['processing']) for w in workers]
+    data['processes'] = [len(d[w]['ports']) for w in workers]
+    source.data.update(data)
