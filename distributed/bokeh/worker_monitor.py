@@ -171,17 +171,9 @@ def worker_table_plot(**kwargs):
 
         paragraph = Paragraph(text='', height=200)
 
-        def f(_, old, new):
-            host = source.data['host']
-            text = 'Hosts: ' + ', '.join(
-                    [host[i] for i in new['1d']['indices']])
-            paragraph.text = text
+        plot = vplot()
 
-        source.on_change('selected', f)
-
-        plot = vplot(mem_plot, paragraph, table)
-
-    return source, plot
+    return source, [mem_plot, paragraph, table]
 
 
 def worker_table_update(source, d):
