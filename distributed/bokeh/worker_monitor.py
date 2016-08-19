@@ -14,7 +14,7 @@ with ignoring(ImportError):
     from bokeh.palettes import Spectral9, Viridis4
     from bokeh.models import HoverTool, Paragraph
     from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
-    from bokeh.plotting import figure, vplot
+    from bokeh.plotting import figure
 
 
 def _format_resource_profile_plot(plot):
@@ -170,8 +170,6 @@ def worker_table_plot(**kwargs):
         hover.point_policy = 'follow_mouse'
 
         paragraph = Paragraph(text='', height=200)
-
-        plot = vplot()
 
     return source, [mem_plot, paragraph, table]
 

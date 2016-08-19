@@ -48,7 +48,7 @@ doc.add_periodic_callback(task_update, messages['tasks']['interval'])
 resource_index = [0]
 resource_source, resource_plot, network_plot, combo_toolbar = resource_profile_plot(sizing_mode=SIZING_MODE, width=WIDTH, height=80)
 def resource_update():
-    with log_errors():
+    with log_errors(pdb=True):
         index = messages['workers']['index']
         data = messages['workers']['plot-data']
 

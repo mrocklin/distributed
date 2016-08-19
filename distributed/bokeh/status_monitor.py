@@ -114,8 +114,9 @@ def nbytes_plot(**kwargs):
 
     fig.grid.grid_line_color = None
     fig.grid.grid_line_color = None
-    fig.axis.visible = None
+    fig.axis.visible = False
     fig.outline_line_color = None
+    fig.yaxis.visible = False
 
     hover = HoverTool()
     fig.add_tools(hover)
