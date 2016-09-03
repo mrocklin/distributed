@@ -22,6 +22,15 @@ evolving task graphs.  It does not go into the specific algorithms of
 dask.array or dask.dataframe, except in so far as they are used as examples.
 
 
+.. toctree::
+   :maxdepth: 1
+
+   related-work.rst
+   background-scheduling.rst
+   architecture.rst
+   task-scheduling.rst
+
+
 How to read this document
 -------------------------
 

@@ -7,8 +7,8 @@ Dask is often compared both to task schedulers like Airflow and Ciel and to
 Task Schedulers
 ---------------
 
-The context of task scheduling is described in :doc:`Task
-Scheduling<task-scheduling>`.
+The context of task scheduling is described in :doc:`Background
+Scheduling<background-scheduling>`.
 
 Industry
 ~~~~~~~~
@@ -122,7 +122,7 @@ the general tool.
 
 
 Task Schedulers within these systems
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Many of these specialized systems also contain rudimentary task schedulers
 within them.  These systems take some high-level representation from the user
