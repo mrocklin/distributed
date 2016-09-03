@@ -219,8 +219,8 @@ Each of the following is a dictionary keyed by task name (described below):
     information see TODO_
 
 
-Stimuli
--------
+Example Event and Reponse
+-------------------------
 
 Whenever an event happens, like when a client sends up more tasks, or when a
 worker finishes a task, the scheduler changes the state above.  For example
@@ -256,3 +256,133 @@ following:
        next_task = ready.pop()
    else:
        idle.add(worker)
+
+
+State Transitions
+-----------------
+
+The code presented in the section above is just for demonstration.  In practice
+writing this code for every possible event is highly error prone, resulting in
+hard-to-track-down bugs.  Instead the scheduler moves tasks between a fixed
+set of states, notably ``'released', 'waiting', 'queue', 'stacks', 'no-worker',
+'processing', 'memory', 'error'``.  Transitions between common pairs of states
+are well defined and, if no path exists between a pair, the graph of
+transitions can be traversed to find a valid sequence of transitions.  Along
+with these transitions come consistent logging and optional runtime checks that
+are useful in testing.
+
+Tasks fall into the following states with the following allowed transitions
+
+.. image:: ../images/task-state.svg
+    :alt: Dask scheduler task states
+
+*  Released: known but not actively computing or in memory
+*  Waiting: On track to be computed, waiting on dependencies to arrive in
+   memory
+*  Queue (ready): Ready to be computed by any worker
+*  Stacks (ready): Ready to be computed by a particular preferred worker
+*  No-worker (ready, rare): Ready to be computed, but no appropriate worker
+   exists
+*  Processing: Actively being computed by one or more workers
+*  Memory: In memory on one or more workers
+*  Erred: Task has computed and erred
+*  Forgotten (not actually a state): Task is no longer needed by any client and
+   so it removed from state
+
+Every transition between states is a separate method in the scheduler.  These
+task transition functions are prefixed with ``transition`` and then have the
+name of the start and finish task state like the following.
+
+.. code-block:: python
+
+   def transition_released_waiting(self, key):
+
+   def transition_processing_memory(self, key):
+
+   def transition_processing_erred(self, key):
+
+These functions each have three effects.
+
+1.  They perform the necessary transformations on the scheduler state (the 20
+    dicts/lists/sets) to move one key between states.
+2.  They return a dictionary of recommended ``{key: state}`` transitions to
+    enact directly afterwards on other keys.  For example after we transition a
+    key into memory we may find that many waiting keys are now ready to
+    transition from waiting to a ready state.
+3.  Optionally they include a set of validation checks that can be turned on
+    for testing.
+
+Rather than call these functions directly we call the central function
+``transition``:
+
+.. code-block:: python
+
+   def transition(self, key, final_state):
+       """ Transition key to the suggested state """
+
+This transition function finds the appropriate path from the current to the
+final state.  Italso serves as a central point for logging and diagnostics.
+
+Often we want to enact several transitions at once or want to continually
+respond to new transitions recommended by initial transitions until we reach a
+steady state.  For that we use the ``transitions`` function (note the plural ``s``).
+
+.. code-block:: python
+
+   def transitions(self, recommendations):
+       recommendations = recommendations.copy()
+       while recommendations:
+           key, finish = recommendations.popitem()
+           new = self.transition(key, finish)
+           recommendations.update(new)
+
+This function runs ``transition``, takes the recommendations and runs them as
+well, repeating until no further task-transitions are recommended.
+
+
+Stimuli
+-------
+
+Transitions occur from stimuli, which are state-changing messages to the
+scheduler from workers or clients.  The scheduler responds to the following
+stimuli:
+
+* **Workers**
+    * Task finished: A task has completed on a worker and is now in memory
+    * Task erred: A task ran and erred on a worker
+    * Task missing data: A task tried to run but was unable to find necessary
+      data on other workers
+    * Worker added: A new worker was added to the network
+    * Worker removed: An existing worker left the network
+
+* **Clients**
+    * Update graph: The client sends more tasks to the scheduler
+    * Release keys: The client no longer desires the result of certain keys
+
+Stimuli functions are prepended with the text ``stimulus``, and take a variety
+of keyword arguments from the message as in the following examples:
+
+.. code-block:: python
+
+   def stimulus_task_finished(self, key=None, worker=None, nbytes=None,
+                              type=None, compute_start=None, compute_stop=None,
+                              transfer_start=None, transfer_stop=None):
+
+   def stimulus_task_erred(self, key=None, worker=None,
+                           exception=None, traceback=None)
+
+These functions change some non-essential administrative state and then call
+transition functions.
+
+Note that there are several other non-state-changing messages that we receive
+from the workers and clients, such as messages requesting information about the
+current state of the scheduler.  These are not considered stimuli.
+
+
+Choosing Workers
+----------------
+
+When a task transitions from waiting to a ready state we sometimes decide a
+suitable worker for that task.  If the task has significant data dependencies
+or if the workers are under heavy load then this choice of worker can strongly
+impact global performance.
