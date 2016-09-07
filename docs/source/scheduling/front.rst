@@ -28,7 +28,8 @@ dask.array or dask.dataframe, except in so far as they are used as examples.
    related-work.rst
    background-scheduling.rst
    architecture.rst
-   task-scheduling.rst
+   scheduling-policies.rst
+   scheduling-state.rst
 
 
 How to read this document

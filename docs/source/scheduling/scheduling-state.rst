@@ -1,5 +1,5 @@
-Task Scheduling
-===============
+Scheduling State
+================
 
 Overview
 --------
@@ -12,16 +12,13 @@ The life of a computation with Dask can be described in the following stages:
 2.  The schedulers assimilates these tasks into its graph of all tasks to track
     and as their dependencies become available it asks workers to run each of
     these tasks.
-3.  The worker recieves information about how to run the task, communicates
+3.  The worker receives information about how to run the task, communicates
     with its peer workers to collect dependencies, and then runs the relevant
     function on the appropriate data.  It reports back to the scheduler that it
     has finished.
 4.  The scheduler reports back to the user that the task has completed.  If the
     user desires, it then fetches the data from the worker through the
     scheduler.
-
-Scheduling
-----------
 
 Most relevant logic is in tracking tasks as they evolve from newly submitted,
 to waiting for dependencies, to ready to run, to actively running on some
@@ -30,8 +27,11 @@ and tracking all effects that this task has on other tasks that might depend on
 it, is the majority of the complexity of the dynamic task scheduler.  This
 section describes the system used to perform this tracking.
 
-State
-~~~~~
+For more abstract information about the policies used by the scheduler, see
+:doc:`Scheduling Policies<scheduling-policies>`.
+
+State Variables
+---------------
 
 We start with a description of the state that the scheduler keeps on each task.
 Each of the following is a dictionary keyed by task name (described below):
@@ -44,7 +44,7 @@ Each of the following is a dictionary keyed by task name (described below):
     generally formed from the name of the function, followed by a hash of the
     function and arguments, like ``'inc-ab31c010444977004d656610d2d421ec'``.
 
-    The value of this dictionariy is the task, which is an unevaluated function
+    The value of this dictionary is the task, which is an unevaluated function
     and arguments.  This is stored in one of two forms:
 
     *  ``{'function': inc, 'args': (1,), 'kwargs': {}}``; a dictionary with the
@@ -75,7 +75,7 @@ Each of the following is a dictionary keyed by task name (described below):
    These are dictionaries very similar to dependencies and dependents, but they
    only track keys that are still in play.  For example ``waiting`` looks like
    ``dependencies``, tracking all of the tasks that a certain task requires
-   before it can run.  Howver as tasks are completed and arrive in memory they
+   before it can run.  However as tasks are completed and arrive in memory they
    are removed from their dependents sets in ``waiting``, so that when a set
    becomes empty we know that a key is ready to run and ready to be allocated
    to a worker.
@@ -98,7 +98,7 @@ Each of the following is a dictionary keyed by task name (described below):
 
     The ``priority`` dictionary provides each key with a relative ranking.
     This ranking is generally a tuple of two parts.  The first (and dominant)
-    part corresponds to when it was submitted.  Generally ealier tasks take
+    part corresponds to when it was submitted.  Generally earlier tasks take
     precedence.  The second part is determined by the client, and is a way to
     prioritize tasks within a large graph that may be important, such as if
     they are on the critical path, or good to run in order to release many
@@ -154,7 +154,7 @@ Each of the following is a dictionary keyed by task name (described below):
 
     The set ``unrunnable`` contains keys that are not currently able to run,
     probably because they have a user defined restriction (described below)
-    that is not met by any avaialble worker.  These keys are waiting for an
+    that is not met by any available worker.  These keys are waiting for an
     appropriate worker to join the network before computing.
 
 * **retrictions:** ``{key: {hostnames}}``:
@@ -227,7 +227,7 @@ worker finishes a task, the scheduler changes the state above.  For example
 when a worker reports that a task has finished we perform actions like the
 following:
 
-**Task ``key`` finished by ``worker**:
+**Task `key` finished by `worker`**:
 
 .. code-block:: python
 
@@ -321,7 +321,7 @@ Rather than call these functions directly we call the central function
        """ Transition key to the suggested state """
 
 This transition function finds the appropriate path from the current to the
-final state.  Italso serves as a central point for logging and diagnostics.
+final state.  It also serves as a central point for logging and diagnostics.
 
 Often we want to enact several transitions at once or want to continually
 respond to new transitions recommended by initial transitions until we reach a
@@ -379,35 +379,12 @@ from the workers and clients, such as messages requesting information about the
 current state of the scheduler.  These are not considered stimuli.
 
 
-Choosing Workers
-----------------
-
-When a task transitions from waiting to a ready state we may decide a suitable
-worker for that task.  If the task has significant data dependencies or if the
-workers are under heavy load then this choice of worker can strongly impact
-global performance.  Currently workers for tasks are determined as follows:
-
-1.  If the task has no major dependencies and no restrictions then it goes into
-    a common pool of tasks to be used by the next worker with nothing better to
-    do.
-2.  Otherwise, if a worker has user-provided restrictions (must run on a
-    machine with a GPU) then we restrict the available pool of workers to just
-    that set, otherwise we consider all workers
-3.  From among this pool of workers we determine the workers to whom the least
-    amount of data would need to be transferred.
-4.  We break ties by choosing the worker that currently has the fewest tasks,
-    counting both those tasks in memory and those tasks processing currently.
-
-This process is easy to change (and indeed this document may be outdated).  We
-encourage readers to inspect the ``decide_worker`` function in scheduler.py
-
-.. currentmodule:: distributed.scheduler
-
-.. autofunction:: decide_worker
-
-
 API
 ---
 
+.. currentmodule:: distributed.scheduler
+
 .. autoclass:: Scheduler
    :members:
+
+.. autofunction:: decide_worker
