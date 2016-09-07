@@ -382,7 +382,32 @@ current state of the scheduler.  These are not considered stimuli.
 Choosing Workers
 ----------------
 
-When a task transitions from waiting to a ready state we sometimes decide a
-suitable worker for that task.  If the task has significant data dependencies
-or if the workers are under heavy load then this choice of worker can strongly
-impact global performance.
+When a task transitions from waiting to a ready state we may decide a suitable
+worker for that task.  If the task has significant data dependencies or if the
+workers are under heavy load then this choice of worker can strongly impact
+global performance.  Currently workers for tasks are determined as follows:
+
+1.  If the task has no major dependencies and no restrictions then it goes into
+    a common pool of tasks to be used by the next worker with nothing better to
+    do.
+2.  Otherwise, if a worker has user-provided restrictions (must run on a
+    machine with a GPU) then we restrict the available pool of workers to just
+    that set, otherwise we consider all workers
+3.  From among this pool of workers we determine the workers to whom the least
+    amount of data would need to be transferred.
+4.  We break ties by choosing the worker that currently has the fewest tasks,
+    counting both those tasks in memory and those tasks processing currently.
+
+This process is easy to change (and indeed this document may be outdated).  We
+encourage readers to inspect the ``decide_worker`` function in scheduler.py
+
+.. currentmodule:: distributed.scheduler
+
+.. autofunction:: decide_worker
+
+
+API
+---
+
+.. autoclass:: Scheduler
+   :members:
