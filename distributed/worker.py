@@ -119,11 +119,17 @@ class Worker(Server):
         self.memory_limit = memory_limit
         if memory_limit:
             try:
-                from zict import Buffer, File, Func
+                from zict import Func, Buffer
             except ImportError:
                 raise ImportError("Please `pip install zict` for spill-to-disk workers")
             path = os.path.join(self.local_dir, 'storage')
-            storage = Func(dumps_to_disk, loads_from_disk, File(path))
+            try:
+                from zict import RocksDB
+            except ImportError:
+                from zict import File
+                storage = Func(dumps_to_disk, loads_from_disk, File(path))
+            else:
+                storage = Func(dumps, loads, RocksDB(path))
             self.data = Buffer({}, storage, int(float(memory_limit)), weight)
         else:
             self.data = dict()
