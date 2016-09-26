@@ -6,7 +6,7 @@ import logging
 import six
 import socket
 import struct
-from time import time
+from time import time, sleep
 import traceback
 import uuid
 
@@ -162,8 +162,9 @@ class Server(TCPServer):
                 if port:
                     raise
                 else:
-                    logger.info('Randomly assigned port taken for %s. Retrying',
-                                type(self).__name__)
+                    logger.info('Port %d taken for %s. Retrying',
+                                port, type(self).__name__)
+                    sleep(0.01)
 
     @gen.coroutine
     def handle_stream(self, stream, address):
