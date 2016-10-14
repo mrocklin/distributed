@@ -214,7 +214,8 @@ class Worker(Server):
                 resp = yield self.scheduler.register(
                         ncores=self.ncores, address=(self.ip, self.port),
                         keys=list(self.data),
-                        name=self.name, nbytes=valmap(sizeof, self.data),
+                        name=self.name,
+                        nbytes=valmap(sizeof, self.data),
                         now=time(),
                         host_info=self.host_health(),
                         services=self.service_ports,

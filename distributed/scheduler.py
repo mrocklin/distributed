@@ -310,6 +310,7 @@ class Scheduler(Server):
                  ('stacks', 'released'): self.transition_ready_released,
                  ('no-worker', 'released'): self.transition_ready_released,
                  ('processing', 'memory'): self.transition_processing_memory,
+                 ('released', 'memory'): self.transition_released_memory,
                  ('processing', 'erred'): self.transition_processing_erred,
                  ('released', 'forgotten'): self.transition_released_forgotten,
                  ('memory', 'forgotten'): self.transition_memory_forgotten,
@@ -506,8 +507,12 @@ class Scheduler(Server):
             if nbytes:
                 self.nbytes.update(nbytes)
 
-            # for key in keys:  # TODO
-            #     self.mark_key_in_memory(key, [address])
+            if keys:
+                recommendations = OrderedDict()
+                for key in keys:
+                    recommendations.update(self.transition(key, 'memory',
+                        nbytes=nbytes[key], worker=address))
+                self.transitions(recommendations)
 
             self.worker_streams[address] = BatchedSend(interval=2, loop=self.loop)
             self._worker_coroutines.append(self.worker_stream(address))
@@ -1888,6 +1893,70 @@ class Scheduler(Server):
                 import pdb; pdb.set_trace()
             raise
 
+    def transition_released_memory(self, key, nbytes=None, type=None,
+            worker=None):
+        try:
+            if self.validate:
+                assert key not in self.who_has
+
+            ############################
+            # Update State Information #
+            ############################
+            if nbytes:
+                self.nbytes[key] = nbytes
+
+            self.who_has[key] = set()
+
+            if worker:
+                self.who_has[key].add(worker)
+                self.has_what[worker].add(key)
+                self.worker_bytes[worker] += self.nbytes.get(key, 1000)
+
+            recommendations = OrderedDict()
+
+            deps = self.dependents.get(key, [])
+            if len(deps) > 1:
+               deps = sorted(deps, key=self.priority.get, reverse=True)
+
+            for dep in deps:
+                if dep in self.waiting:
+                    s = self.waiting[dep]
+                    s.remove(key)
+                    if not s:  # new task ready to run
+                        recommendations[dep] = 'ready'
+
+            for dep in self.dependencies.get(key, []):
+                if dep in self.waiting_data:
+                    s = self.waiting_data[dep]
+                    s.remove(key)
+                    if (not s and dep and
+                        dep not in self.who_wants and
+                        not self.waiting_data.get(dep)):
+                        recommendations[dep] = 'released'
+
+            if (not self.waiting_data.get(key) and
+                key not in self.who_wants):
+                recommendations[key] = 'released'
+            else:
+                msg = {'op': 'key-in-memory',
+                       'key': key}
+                if type is not None:
+                    msg['type'] = type
+                self.report(msg)
+
+            self.task_state[key] = 'memory'
+
+            if self.validate:
+                assert key not in self.rprocessing
+                assert key in self.who_has
+
+            return recommendations
+        except Exception as e:
+            logger.exception(e)
+            if LOG_PDB:
+                import pdb; pdb.set_trace()
+            raise
+
     def transition_processing_memory(self, key, nbytes=None, type=None,
             worker=None, compute_start=None, compute_stop=None,
             transfer_start=None, transfer_stop=None, **kwargs):
@@ -1945,9 +2014,6 @@ class Scheduler(Server):
                 self.who_has[key].add(worker)
                 self.has_what[worker].add(key)
                 self.worker_bytes[worker] += self.nbytes.get(key, 1000)
-
-            if nbytes:
-                self.nbytes[key] = nbytes
 
             workers = self.rprocessing.pop(key)
             for worker in workers:
@@ -2436,11 +2502,11 @@ class Scheduler(Server):
                 recommendations = func(key, *args, **kwargs)
             else:
                 func = self._transitions['released', finish]
-                assert not args and not kwargs
                 a = self.transition(key, 'released')
-                if key in a:
-                    func = self._transitions['released', a[key]]
-                b = func(key)
+                # if key in a:
+                #     func = self._transitions['released', a[key]]
+                func = self._transitions[self.task_state[key], finish]
+                b = func(key, *args, **kwargs)
                 a = a.copy()
                 a.update(b)
                 recommendations = a

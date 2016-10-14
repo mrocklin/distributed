@@ -3678,3 +3678,54 @@ def test_add_done_callback(c, s, a, b):
     yield _wait(x)
 
     assert L == [x.key, x.status]
+
+
+@gen_cluster(client=True)
+def test_workers_add_data_short_circuits_processing(c, s, a, b):
+    x = c.submit(slowinc, 1, delay=4)
+    w = Worker(s.ip, s.port, ip=a.ip, loop=s.loop)
+    w.data[x.key] = 2
+    yield w._start()
+    start = time()
+
+    result = yield x._result()
+    assert result == 2
+    end = time()
+    assert end - start < 2
+
+    yield w._close()
+
+
+@gen_cluster(client=True)
+def test_workers_add_data_jumps_over_computation(c, s, a, b):
+    x = c.submit(slowinc, 1, delay=4)
+    y = c.submit(inc, x)
+    z = c.submit(inc, y)
+
+    w = Worker(s.ip, s.port, ip=a.ip, loop=s.loop)
+    w.data[z.key] = 4
+    yield w._start()
+    start = time()
+
+    result = yield z._result()
+    assert result == 4
+    end = time()
+    assert end - start < 2
+    assert s.task_state[y.key] == 'released'
+
+    yield w._close()
+
+
+@gen_cluster(client=True)
+def test_lose_and_regain_data(c, s, a, b):
+    [x] = yield c._scatter([1])
+
+    w = first(s.who_has[x.key])
+    if a.address == w:
+        yield a._close()
+    elif b.address == w:
+        yield b._close()
+
+    y = c.submit(inc, x)
+
+
