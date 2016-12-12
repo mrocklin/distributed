@@ -638,7 +638,7 @@ class Scheduler(Server):
 
     def stimulus_task_finished(self, key=None, worker=None, **kwargs):
         """ Mark that a task has finished execution on a particular worker """
-        logger.debug("Stimulus task finished %s, %s", key, worker)
+        # logger.debug("Stimulus task finished %s, %s", key, worker)
         if key not in self.task_state:
             return {}
 
@@ -660,7 +660,7 @@ class Scheduler(Server):
     def stimulus_task_erred(self, key=None, worker=None,
                         exception=None, traceback=None, **kwargs):
         """ Mark that a task has erred on a particular worker """
-        logger.debug("Stimulus task erred %s, %s", key, worker)
+        # logger.debug("Stimulus task erred %s, %s", key, worker)
 
         if key not in self.task_state:
             return {}
@@ -1563,7 +1563,7 @@ class Scheduler(Server):
         with log_errors():
             who_has = {k: [self.coerce_address(vv) for vv in v]
                        for k, v in who_has.items()}
-            logger.debug("Update data %s", who_has)
+            # logger.debug("Update data %s", who_has)
             if client:
                 self.client_wants_keys(keys=list(who_has), client=client)
 
