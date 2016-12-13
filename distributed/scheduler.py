@@ -201,6 +201,7 @@ class Scheduler(Server):
         self.delete_interval = delete_interval
         self.synchronize_worker_interval = synchronize_worker_interval
         self.steal = steal
+        self.stealing = set()
 
         # Communication state
         self.loop = loop or IOLoop.current()
@@ -593,6 +594,8 @@ class Scheduler(Server):
                 self.priority[key] = (self.generation, new_priority[key]) # prefer old
 
         if restrictions:
+            restrictions = {k: v for k, v in restrictions.items()
+                                 if v is not None}
             restrictions = {k: set(map(self.coerce_address, v))
                             for k, v in restrictions.items()}
             worker_restrictions = {k: {w for w in s if ':' in w}
@@ -2485,14 +2488,18 @@ class Scheduler(Server):
 
                     logger.debug("Stolen %d keys:  %s <- %s",
                                  len(response['keys']), idle, saturated)
-            except EnvironmentError:
-                logger.info("Stream closed while monitoring stealing")
+            except EnvironmentError as e:
+                logger.info("Stream closed while monitoring stealing",
+                            exc_info=True)
                 return
             else:
                 write(stream, {'op': 'close'})
                 close(stream)
 
-            raise gen.Return(response['keys'])
+            if response['keys']:
+                raise gen.Return(response['keys'])
+            else:
+                return  # tornado doesn't like raising []
         except gen.Return:
             raise
         except Exception as e:
@@ -2500,6 +2507,8 @@ class Scheduler(Server):
             if LOG_PDB:
                 import pdb; pdb.set_trace()
             raise
+        finally:
+            self.stealing.remove(idle)
 
     def balance_by_stealing(self):
         with log_errors():
@@ -2513,6 +2522,8 @@ class Scheduler(Server):
             saturated = list()
 
             for worker, duration in self.occupancy.iteritems():
+                if worker in self.stealing:
+                    continue
                 time_until_completion = duration / self.ncores[worker]
                 if (time_until_completion < 0.3 or
                     time_until_completion / avg < 0.25):
@@ -2558,6 +2569,7 @@ class Scheduler(Server):
                         break
                     else:
                         occ -= budget
+                        self.stealing.add(i)
                         self.loop.add_callback(self.work_steal, i, s,
                                                budget=frac)
                         flag = True
