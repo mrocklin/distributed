@@ -518,7 +518,8 @@ class Counters(DashboardComponent):
                         except ZeroDivisionError:
                             pass
                         else:
-                            self.digest_sources[name][i].data.update({'x': xs, 'y': ys})
+                            if not any(map(math.isnan, ys)):
+                                self.digest_sources[name][i].data.update({'x': xs, 'y': ys})
                 figure.title.text = '%s: %d' % (name, digest.size())
 
             for name, figure in self.counter_figures.items():
