@@ -1578,15 +1578,19 @@ class Worker(WorkerBase):
             budget = budget * total_duration
             good = set()
             cost = 0
-            while heap and cost < budget:
+            failed = 0
+            best = heap[-1] if heap else None
+            while heap and cost < budget and failed < 20:
                 score, k, compute, communicate = heapq.heappop(heap)
-                cost += compute + communicate
-                if cost < budget:
+                if (cost < budget or not good and cost < total_duration / 2):
+                    cost += compute + communicate
                     good.add(k)
+                else:
+                    failed += 1
 
             if not good:
-                if cost < total_duration / 2:  # try to send something
-                    good.add(k)
+                logger.info("Failed to steal: total: %3f best: %s budget: %f",
+                            total_duration, best, budget)
 
             msgs = {}
             for k in good:
@@ -1616,8 +1620,11 @@ class Worker(WorkerBase):
             self.steal_offered.update(good)
             for key in good:
                 self.log.append((key, 'steal-offer', worker))
-            logger.info("Sending %3d tasks: %s -> %s", len(good), self.address,
-                        worker)
+
+            if good:
+                logger.info("Sending %3d tasks: %s -> %s", len(good), self.address,
+                            worker)
+
             yield write(stream, {'msgs': msgs, 'keys': list(good)})  # wait on ack
             response = yield read(stream)
             stolen = set(response)
