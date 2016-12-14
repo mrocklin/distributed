@@ -811,10 +811,11 @@ class Worker(WorkerBase):
         WorkerBase.__init__(self, *args, **kwargs)
 
     def __str__(self):
-        return "<%s: %s, %s, running: %d/%d, ready: %d, comm: %d, waiting: %d>" % (
+        return "<%s: %s, %s, stored: %d, running: %d/%d, ready: %d, comm: %d, waiting: %d>" % (
                 self.__class__.__name__, self.address, self.status,
-                len(self.executing), self.ncores, len(self.ready),
-                len(self.in_flight), len(self.waiting_for_data))
+                len(self.data), len(self.executing), self.ncores,
+                len(self.ready), len(self.in_flight),
+                len(self.waiting_for_data))
 
     __repr__ = __str__
 
@@ -1577,16 +1578,23 @@ class Worker(WorkerBase):
             budget = budget * total_duration
             good = set()
             cost = 0
-            while heap:
+            while heap and cost < budget:
                 score, k, compute, communicate = heapq.heappop(heap)
                 cost += compute + communicate
                 if cost < budget:
                     good.add(k)
 
+            if not good:
+                if cost < total_duration / 2:  # try to send something
+                    good.add(k)
+
             msgs = {}
             for k in good:
                 d = {}
-                d['task'] = to_serialize(self.raw_tasks[k])
+                try:
+                    d['task'] = to_serialize(self.raw_tasks[k])
+                except KeyError:
+                    continue
                 who_has = {dep: list(self.who_has.get(dep, []))
                            for dep in self.dependencies[k]}
                 for dep, deps in who_has.items():
@@ -1616,7 +1624,10 @@ class Worker(WorkerBase):
 
             # We're clear to remove these keys.  Scheduler is aware
             for key in good:
-                self.steal_offered.remove(key)
+                try:
+                    self.steal_offered.remove(key)
+                except KeyError:
+                    pass
                 if key in stolen:
                     self.log.append((key, 'steal-donate', worker))
                     self.rescind_key(key)
