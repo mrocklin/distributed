@@ -545,6 +545,7 @@ class Scheduler(Server):
 
         This happens whenever the Client calls submit, map, get, or compute.
         """
+        start = time()
         original_keys = keys
         keys = set(keys)
         self.client_desires_keys(keys=keys, client=client)
@@ -641,6 +642,10 @@ class Scheduler(Server):
         for key in keys:
             if self.task_state[key] in ('memory', 'erred'):
                 self.report_on_key(key, client=client)
+
+        end = time()
+        if self.digests is not None:
+            self.digests['update-graph-duration'].add(end - start)
 
         # TODO: balance workers
 
@@ -1126,19 +1131,29 @@ class Scheduler(Server):
         try:
             while True:
                 msgs = yield read(stream)
+                start = time()
+
                 if not isinstance(msgs, list):
                     msgs = [msgs]
 
                 if worker in self.worker_info and not stream.closed():
+                    self.counters['worker-message-length'].add(len(msgs))
                     recommendations = OrderedDict()
                     for msg in msgs:
                         if msg == 'OK':  # from close
                             break
 
+                        if 'status' in msg and 'error' in msg['status']:
+                            logger.exception(clean_exception(**msg)[1])
+
                         self.correct_time_delay(worker, msg)
                         op = msg.pop('op')
                         handler = self.worker_handlers[op]
                         handler(worker=worker, **msg)
+
+                end = time()
+                if self.digests is not None:
+                    self.digests['handle-worker-duration'].add(end - start)
 
         except (StreamClosedError, IOError, OSError):
             logger.info("Worker failed from closed stream: %s", worker)
@@ -2536,10 +2551,14 @@ class Scheduler(Server):
                 write(stream, {'op': 'close'})
                 close(stream)
 
+            if self.counters:
+                self.counters['stolen-keys'].add(len(response['keys']))
+
             if response['keys']:
                 raise gen.Return(response['keys'])
             else:
-                return  # tornado doesn't like raising []
+                return  # tornado burns cpu when returning empty lists
+
         except gen.Return:
             raise
         except Exception as e:
