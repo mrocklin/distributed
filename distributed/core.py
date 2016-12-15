@@ -172,7 +172,7 @@ class Server(TCPServer):
         Coroutines should expect a single IOStream object.
         """
         stream.set_nodelay(True)
-        set_tcp_timeout(stream)
+        # set_tcp_timeout(stream)
         op = None
 
         ip, port = address
@@ -374,7 +374,7 @@ def connect(ip, port, timeout=3):
         try:
             stream = yield gen.with_timeout(timedelta(seconds=timeout), future)
             stream.set_nodelay(True)
-            set_tcp_timeout(stream)
+            # set_tcp_timeout(stream)
             raise gen.Return(stream)
         except EnvironmentError:
             if time() - start < timeout:
