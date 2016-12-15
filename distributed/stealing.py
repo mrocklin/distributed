@@ -107,8 +107,9 @@ class WorkStealing(SchedulerPlugin):
             if self.scheduler.validate:
                 assert victim in self.scheduler.rprocessing[key]
 
-            logger.info("Moved %s, %2f %2f", key, self.scheduler.occupancy[victim],
-                    self.scheduler.occupancy[thief])
+            logger.info("Moved %s, %s: %2f -> %s: %2f", key,
+                    victim, self.scheduler.occupancy[victim],
+                    thief, self.scheduler.occupancy[thief])
 
             try:
                 self.scheduler.send_task_to_worker(thief, key)
