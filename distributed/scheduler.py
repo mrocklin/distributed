@@ -1862,7 +1862,7 @@ class Scheduler(Server):
             try:
                 self.send_task_to_worker(worker, key)
             except StreamClosedError:
-                self.remove_worker(worker)
+                logger.info("Tried to send task to non-responsive worker")
 
             if self.validate:
                 assert key not in self.waiting
@@ -2028,7 +2028,7 @@ class Scheduler(Server):
                         self.worker_streams[w].send({'op': 'delete-data',
                                                      'keys': [key], 'report': False})
                     except EnvironmentError:
-                        self.loop.add_callback(self.remove_worker, address=w)
+                        logger.info("Tried to send task to non-responsive worker")
 
             self.released.add(key)
 
@@ -2307,7 +2307,7 @@ class Scheduler(Server):
                         self.worker_streams[w].send({'op': 'delete-data',
                                                      'keys': [key], 'report': False})
                     except EnvironmentError:
-                        self.loop.add_callback(self.remove_worker, address=w)
+                        logger.info("Tried to send task to non-responsive worker")
 
             if self.validate:
                 assert all(key not in self.dependents[dep]

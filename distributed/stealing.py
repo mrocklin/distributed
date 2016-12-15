@@ -105,30 +105,29 @@ class WorkStealing(SchedulerPlugin):
     def move_task(self, key, victim, thief):
         with log_errors():
             if self.scheduler.validate:
-                if victim not in self.scheduler.rprocessing[key]:
-                    import pdb; pdb.set_trace()
+                assert victim in self.scheduler.rprocessing[key]
 
             logger.info("Moved %s, %2f %2f", key, self.scheduler.occupancy[victim],
                     self.scheduler.occupancy[thief])
 
-            duration = self.scheduler.processing[victim].pop(key)
-            self.scheduler.rprocessing[key].remove(victim)
-            self.scheduler.occupancy[victim] -= duration
-            self.scheduler.total_occupancy -= duration
-
-            duration = self.scheduler.task_duration.get(key_split(key), 0.5)
-            self.scheduler.processing[thief][key] = duration
-            self.scheduler.rprocessing[key].add(thief)
-            self.scheduler.occupancy[thief] += duration
-            self.scheduler.total_occupancy += duration
-
-            self.scheduler.worker_streams[victim].send({'op': 'release-task',
-                                                        'key': key})
-
             try:
                 self.scheduler.send_task_to_worker(thief, key)
+                self.scheduler.worker_streams[victim].send({'op': 'release-task',
+                                                            'key': key})
             except StreamClosedError:
-                self.scheduler.remove_worker(thief)
+                logger.info("Tried to send to closed stream")
+            else:
+                duration = self.scheduler.processing[victim].pop(key)
+                self.scheduler.rprocessing[key].remove(victim)
+                self.scheduler.occupancy[victim] -= duration
+                self.scheduler.total_occupancy -= duration
+
+                duration = self.scheduler.task_duration.get(key_split(key), 0.5)
+                self.scheduler.processing[thief][key] = duration
+                self.scheduler.rprocessing[key].add(thief)
+                self.scheduler.occupancy[thief] += duration
+                self.scheduler.total_occupancy += duration
+
 
     def balance(self):
         with log_errors():
