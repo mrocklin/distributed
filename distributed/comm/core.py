@@ -30,7 +30,7 @@ listeners = {
     }
 
 
-DEFAULT_SCHEME = 'tcp'
+DEFAULT_SCHEME = 'zmq'
 
 
 class CommClosedError(IOError):
