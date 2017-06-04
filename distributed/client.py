@@ -1151,10 +1151,10 @@ class Client(Node):
         if isinstance(data, dict):
             data2 = valmap(to_serialize, data)
             types = valmap(type, data)
-        elif isinstance(data, (list, tuple, set, frozenset)):
+        elif isinstance(data, (list, tuple, set, frozenset, type(range(0)))):
             data2 = list(map(to_serialize, data))
             types = list(map(type, data))
-        elif isinstance(data, (Iterable, Iterator)):
+        elif isinstance(data, Iterator):
             data2 = list(map(to_serialize, data))
             types = list(map(type, data))
         else:
