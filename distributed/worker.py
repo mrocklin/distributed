@@ -25,7 +25,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.locks import Event
 
 from .batched import BatchedSend
-from .comm import get_address_host, get_local_address_for
+from .comm import get_address_host, get_address_host_port, get_local_address_for
 from .config import config
 from .compatibility import unicode, get_thread_identity
 from .core import (error_message, CommClosedError,
@@ -76,7 +76,7 @@ class WorkerBase(ServerNode):
                  name=None, heartbeat_interval=5000, reconnect=True,
                  memory_limit='auto', executor=None, resources=None,
                  silence_logs=None, death_timeout=None, preload=(),
-                 security=None, advertise_addr = None, **kwargs):
+                 security=None, advertise_addr=None, **kwargs):
         if scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
@@ -210,6 +210,8 @@ class WorkerBase(ServerNode):
         start = time()
         if self.advertise_addr is None:
             self.advertise_addr = self.address
+        else:
+            self.advertise_addr = self.advertise_addr + ":" + str(get_address_host_port(self.address)[1])
         while True:
             if self.death_timeout and time() > start + self.death_timeout:
                 yield self._close(timeout=1)
