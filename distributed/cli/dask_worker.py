@@ -47,6 +47,11 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Bokeh port, defaults to 8789")
 @click.option('--bokeh/--no-bokeh', 'bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
+@click.option('--worker-advertise-addr', type=str, default=None,
+        help="The <address>:<port> the worker advertises to the scheduler "
+                   "for communication with it and other workers for example "
+                   "in the case of using workers behind NAT. "
+                   "If not specified uses the worker address")
 @click.option('--host', type=str, default=None,
               help="Serving host. Should be an ip address that is"
                    " visible to the scheduler and other workers. "
@@ -84,7 +89,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option('--preload', type=str, multiple=True,
               help='Module that should be loaded by each worker process '
                    'like "foo.bar" or "/path/to/foo.py"')
-def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
+def main(scheduler, host, worker_port, worker_advertise_addr, http_port, nanny_port, nthreads, nprocs,
          nanny, name, memory_limit, pid_file, reconnect,
          resources, bokeh, bokeh_port, local_directory, scheduler_file,
          interface, death_timeout, preload, bokeh_prefix,
@@ -183,7 +188,7 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
                  services=services, name=name, loop=loop, resources=resources,
                  memory_limit=memory_limit, reconnect=reconnect,
                  local_dir=local_directory, death_timeout=death_timeout,
-                 preload=preload, security=sec,
+                 preload=preload, security=sec, advertise_addr = worker_advertise_addr,
                  **kwargs)
                for i in range(nprocs)]
 
