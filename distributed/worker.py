@@ -25,7 +25,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.locks import Event
 
 from .batched import BatchedSend
-from .comm import get_address_host, get_address_host_port, get_local_address_for
+from .comm import get_address_host, get_local_address_for
 from .config import config
 from .compatibility import unicode, get_thread_identity
 from .core import (error_message, CommClosedError,
