@@ -76,7 +76,7 @@ class WorkerBase(ServerNode):
                  name=None, heartbeat_interval=5000, reconnect=True,
                  memory_limit='auto', executor=None, resources=None,
                  silence_logs=None, death_timeout=None, preload=(),
-                 security=None, advertise_addr=None, **kwargs):
+                 security=None, contact_addr=None, **kwargs):
         if scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
@@ -87,7 +87,7 @@ class WorkerBase(ServerNode):
         self.available_resources = (resources or {}).copy()
         self.death_timeout = death_timeout
         self.preload = preload
-        self.advertise_addr = advertise_addr
+        self.contact_addr = contact_addr
         if silence_logs:
             silence_logging(level=silence_logs)
 
@@ -187,7 +187,7 @@ class WorkerBase(ServerNode):
                     kwargs = {}
 
                 yield self.scheduler.register(
-                        address=self.advertise_addr,
+                        address=self.contact_addr,
                         name=self.name,
                         ncores=self.ncores,
                         now=time(),
@@ -208,10 +208,8 @@ class WorkerBase(ServerNode):
     def _register_with_scheduler(self):
         self.heartbeat_callback.stop()
         start = time()
-        if self.advertise_addr is None:
-            self.advertise_addr = self.address
-        else:
-            self.advertise_addr = self.advertise_addr + ":" + str(get_address_host_port(self.address)[1])
+        if self.contact_addr is None:
+            self.contact_addr = self.address
         while True:
             if self.death_timeout and time() > start + self.death_timeout:
                 yield self._close(timeout=1)
@@ -220,7 +218,7 @@ class WorkerBase(ServerNode):
                 raise gen.Return
             try:
                 future = self.scheduler.register(
-                        ncores=self.ncores, address=self.advertise_addr,
+                        ncores=self.ncores, address=self.contact_addr,
                         keys=list(self.data),
                         name=self.name,
                         nbytes=self.nbytes,
@@ -332,7 +330,7 @@ class WorkerBase(ServerNode):
         with ignoring(EnvironmentError, gen.TimeoutError):
             if report:
                 yield gen.with_timeout(timedelta(seconds=timeout),
-                        self.scheduler.unregister(address=self.advertise_addr),
+                        self.scheduler.unregister(address=self.contact_addr),
                         io_loop=self.loop)
         self.scheduler.close_rpc()
         self.executor.shutdown()
@@ -442,7 +440,7 @@ class WorkerBase(ServerNode):
             if report:
                 logger.debug("Reporting loss of keys to scheduler")
                 # TODO: this route seems to not exist?
-                yield self.scheduler.remove_keys(address=self.advertise_addr,
+                yield self.scheduler.remove_keys(address=self.contact_addr,
                                                  keys=list(keys))
         raise Return('OK')
 
@@ -494,7 +492,7 @@ class WorkerBase(ServerNode):
             self.total_resources[r] = quantity
 
         yield self.scheduler.set_resources(resources=self.total_resources,
-                                           worker=self.advertise_addr)
+                                           worker=self.contact_addr)
 
     def start_ipython(self, comm):
         """Start an IPython kernel
