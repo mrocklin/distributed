@@ -48,15 +48,14 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Bokeh port, defaults to 8789")
 @click.option('--bokeh/--no-bokeh', 'bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
-@click.option('--listen-addr', type=str, default=None,
-        help="The <address>:<port> on which the worker binds to. "
+@click.option('--listen-address', type=str, default=None,
+        help="The <protocol>://<address>:<port> on which the worker binds to. "
                    "The options --worker-port and --host are not compatible "
                    "with this option. Cannot be used with --nprocs>1")
-@click.option('--contact-addr', type=str, default=None,
-        help="The <address>:<port> the worker advertises to the scheduler "
-                   "for communication with it and other workers. For eg., "
-                   "in the case of using workers behind NAT. If specified "
-                   "must also specify listen-address. "
+@click.option('--contact-address', type=str, default=None,
+        help="The <protocol>://<address>:<port> the worker advertises to the scheduler "
+                   "for communication with it and other workers. If specified "
+                   "must also specify --listen-address. "
                    "If not specified uses the --listen-address")
 @click.option('--host', type=str, default=None,
               help="Serving host. Should be an ip address that is"
@@ -98,7 +97,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help='Module that should be loaded by each worker process '
                    'like "foo.bar" or "/path/to/foo.py"')
 
-def main(scheduler, host, worker_port, listen_addr, contact_addr,
+def main(scheduler, host, worker_port, listen_address, contact_address,
          http_port, nanny_port, nthreads, nprocs, nanny, name,
          memory_limit, pid_file, reconnect, resources, bokeh,
          bokeh_port, local_directory, scheduler_file, interface,
@@ -109,11 +108,6 @@ def main(scheduler, host, worker_port, listen_addr, contact_addr,
                    tls_worker_key=tls_key,
                    )
 
-    if nanny:
-        port = nanny_port
-    else:
-        port = worker_port
-
     if nprocs > 1 and worker_port != 0:
         logger.error("Failed to launch worker.  You cannot use the --port argument when nprocs > 1.")
         exit(1)
@@ -122,31 +116,39 @@ def main(scheduler, host, worker_port, listen_addr, contact_addr,
         logger.error("Failed to launch worker.  You cannot use the --name argument when nprocs > 1.")
         exit(1)
 
-    if contact_addr and not listen_addr:
+    if contact_address and not listen_address:
         logger.error("Failed to launch worker. "
-                     "Must specify --listen-addr when --contact-addr is given")
+                     "Must specify --listen-address when --contact-address is given")
         exit(1)
 
-    if nprocs > 1 and listen_addr:
+    if nprocs > 1 and listen_address:
         logger.error("Failed to launch worker. "
-                     "You cannot specify --listen-addr when nprocs > 1.")
+                     "You cannot specify --listen-address when nprocs > 1.")
         exit(1)
 
-    if  (worker_port or host) and listen_addr:
+    if  (worker_port or host) and listen_address:
         logger.error("Failed to launch worker. "
-                     "You cannot specify --listen-addr when --worker-port or --host is given.")
+                     "You cannot specify --listen-address when --worker-port or --host is given.")
         exit(1)
 
     try:
-        if listen_addr:
-            (host, worker_port) = get_address_host_port(listen_addr)
+        if listen_address:
+            (host, worker_port) = get_address_host_port(listen_address, strict=True)
 
-        if contact_addr:
+        if contact_address:
             # we only need this to verify it is getting parsed
-            (_, _) = get_address_host_port(contact_addr)
+            (_, _) = get_address_host_port(contact_address, strict=True)
+        else:
+            # if contact address is not present we use the listen_address for contact
+            contact_address = listen_address
     except ValueError as e:
         logger.error("Failed to launch worker. " + str(e))
         exit(1)
+
+    if nanny:
+        port = nanny_port
+    else:
+        port = worker_port
 
     if not nthreads:
         nthreads = _ncores // nprocs
@@ -224,7 +226,7 @@ def main(scheduler, host, worker_port, listen_addr, contact_addr,
                  services=services, name=name, loop=loop, resources=resources,
                  memory_limit=memory_limit, reconnect=reconnect,
                  local_dir=local_directory, death_timeout=death_timeout,
-                 preload=preload, security=sec, contact_addr = contact_addr,
+                 preload=preload, security=sec, contact_addr = contact_address,
                  **kwargs)
                for i in range(nprocs)]
 
