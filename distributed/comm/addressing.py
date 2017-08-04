@@ -8,7 +8,8 @@ from . import registry
 
 DEFAULT_SCHEME = config.get('default-scheme', 'tcp')
 
-def parse_address(addr, strict = False):
+
+def parse_address(addr, strict=False):
     """
     Split address into its scheme and scheme-dependent location string.
 
