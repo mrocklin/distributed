@@ -394,7 +394,7 @@ class WorkerProcess(object):
         delay = 0.05
         while True:
             if self.status != 'starting':
-                raise ValueError("Worker not started")
+                raise ValueError("Worker not started", self.status)
             try:
                 msg = self.init_result_q.get_nowait()
             except Empty:
