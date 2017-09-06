@@ -57,7 +57,7 @@ def main(scheduler_file, interface, nthreads, local_directory, memory_limit,
                         name=rank if scheduler else None,
                         ncores=nthreads,
                         local_dir=local_directory,
-                        services={'bokeh': BokehWorker},
+                        services={('bokeh', 8789): BokehWorker},
                         memory_limit=memory_limit)
         addr = uri_from_host_port(host, None, 0)
 
