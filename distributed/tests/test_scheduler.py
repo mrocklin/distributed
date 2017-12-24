@@ -603,7 +603,9 @@ def test_retire_workers(c, s, a, b):
     assert s.workers_to_close() == [a.address]
 
     workers = yield s.retire_workers()
+    assert isinstance(workers, dict)
     assert list(workers) == [a.address]
+    assert set(workers[a.address]).issuperset({'memory_limit', 'ncores', 'host'})
     assert workers[a.address]['ncores'] == a.ncores
     assert list(s.ncores) == [b.address]
 
