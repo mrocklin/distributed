@@ -5267,6 +5267,7 @@ def test_client_timeout_2():
 
 @gen_cluster()
 def test_turn_off_pickle(s, a, b):
+    import numpy as np
     c = yield Client(s.address, asynchronous=True,
                      serializers=['dask', 'msgpack'])
     yield c.submit(inc, 1)

@@ -488,7 +488,7 @@ class Client(Node):
                  set_as_default=True, scheduler_file=None,
                  security=None, asynchronous=False,
                  name=None, heartbeat_interval=None,
-                 serializers=None, **kwargs):
+                 dask_serialize=True, fallback_serializer='pickle', **kwargs):
         if timeout == no_default:
             timeout = config.get('connect-timeout', '10s')
         if timeout is not None:
@@ -513,7 +513,8 @@ class Client(Node):
         self._lock = threading.Lock()
         self._refcount_lock = threading.Lock()
         self.datasets = Datasets(self)
-        self._serializers = serializers
+        self._dask_serialize = dask_serialize
+        self._fallback_serializer = fallback_serializer
 
         # Communication
         self.security = security or Security()

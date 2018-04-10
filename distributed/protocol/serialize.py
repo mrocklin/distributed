@@ -135,7 +135,7 @@ def serialize(x, use_dask=True, fallback='pickle'):
     if isinstance(x, Serialized):
         return x.header, x.frames
 
-    if use_dask in serializers:
+    if use_dask:
         typ = type(x)
         name = typename(typ)
         if name in serializers:
