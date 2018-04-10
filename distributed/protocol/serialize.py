@@ -17,9 +17,17 @@ from .utils import unpack_frames, pack_frames_prelude, frame_split_size
 
 
 serializers = {}
-deserializers = {None: lambda header, frames: pickle.loads(b''.join(frames))}
+deserializers = {}
 
 lazy_registrations = {}
+
+# generalist de-serialization for any object. The keys are the options
+# available for a comm channel or Client
+deser = {
+ 'dask': None,  # this one is special, attempts special deser first
+ 'pickle': (pickle.dumps, pickle.loads),
+ 'msgpack': (msgpack.dumps, msgpack.loads)
+}
 
 
 def register_serialization(cls, serialize, deserialize):
@@ -90,14 +98,17 @@ def _find_lazy_registration(typename):
         return False
 
 
-def serialize(x):
+def serialize(x, use_dask=True, fallback='pickle'):
     r"""
     Convert object to a header and list of bytestrings
 
     This takes in an arbitrary Python object and returns a msgpack serializable
-    header and a list of bytes or memoryview objects.  By default this uses
-    pickle/cloudpickle but can use special functions if they have been
-    pre-registered.
+    header and a list of bytes or memoryview objects.
+
+    The serialization protocols to use are defined by the optional arguments.
+    If use_dask is set, then special per-object functions, as
+    registered, will be attempted. The fallback is typically "pickle" but
+    could be any general-purpose serialization protocol such as "msgpack".
 
     Examples
     --------
@@ -124,15 +135,16 @@ def serialize(x):
     if isinstance(x, Serialized):
         return x.header, x.frames
 
-    typ = type(x)
-    name = typename(typ)
-    if name in serializers:
-        header, frames = serializers[name](x)
-        header['type'] = name
+    if use_dask in serializers:
+        typ = type(x)
+        name = typename(typ)
+        if name in serializers:
+            header, frames = serializers[name](x)
+            header['type'] = name
+        elif _find_lazy_registration(name):
+            return serialize(x, use_dask, fallback)  # recurse
     else:
-        if _find_lazy_registration(name):
-            return serialize(x)  # recurse
-        header, frames = {}, [pickle.dumps(x)]
+        header, frames = {'type': fallback}, [deser[fallback][0](x)]
 
     return header, frames
 
@@ -154,8 +166,8 @@ def deserialize(header, frames):
     if name not in deserializers:
         if _find_lazy_registration(name):
             return deserialize(header, frames)  # recurse
-    f = deserializers[header.get('type')]
-    return f(header, frames)
+    f = deser[header.get('type')][1]
+    return f(b''.join(frames))
 
 
 class Serialize(object):

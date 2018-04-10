@@ -11,6 +11,7 @@ from tornado import gen
 from ..config import config
 from ..metrics import time
 from ..utils import parse_timedelta
+from ..protocol.serialize import deser
 from . import registry
 from .addressing import parse_address
 

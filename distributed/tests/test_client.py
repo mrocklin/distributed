@@ -3638,7 +3638,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
     psutil = pytest.importorskip('psutil')
     proc = psutil.Process()
 
-    with cluster(nworkers=0, active_rpc_timeout=20) as (s, []):
+    with cluster(nworkers=0, active_rpc_timeout=20) as (s, _):
         gc.collect()
         before = proc.num_fds()
         done = Semaphore(0)
@@ -5263,6 +5263,22 @@ def test_client_timeout_2():
         yield c.close()
 
         assert stop - start < 1
+
+
+@gen_cluster()
+def test_turn_off_pickle(s, a, b):
+    c = yield Client(s.address, asynchronous=True,
+                     serializers=['dask', 'msgpack'])
+    yield c.submit(inc, 1)
+    yield c.submit(np.ones, 5)
+
+    # can send complex tasks (this uses pickle regardless)
+    future = c.submit(lambda x: x, inc)
+    yield wait(future)
+
+    # but can't receive complex results
+    with pytest.raises(TypeError):
+        yield future
 
 
 if sys.version_info >= (3, 5):
