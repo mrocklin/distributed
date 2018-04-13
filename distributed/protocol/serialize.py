@@ -98,17 +98,19 @@ def _find_lazy_registration(typename):
         return False
 
 
-def serialize(x, use_dask=True, fallback='pickle'):
+def serialize(x, serializers=None):
     r"""
     Convert object to a header and list of bytestrings
 
     This takes in an arbitrary Python object and returns a msgpack serializable
     header and a list of bytes or memoryview objects.
 
-    The serialization protocols to use are defined by the optional arguments.
-    If use_dask is set, then special per-object functions, as
-    registered, will be attempted. The fallback is typically "pickle" but
-    could be any general-purpose serialization protocol such as "msgpack".
+    The serialization protocols to use are configurable: a list of names
+    define the set of serializers to use, in order. These names are keys in
+    the ``deser`` dict (e.g., 'pickle', 'msgpack'), which maps to the
+    de/serialize functions. The name 'dask' is special, and will use the
+    per-class serialization methods. ``None`` gives the default list
+    ``['dask', 'pickle']``.
 
     Examples
     --------
@@ -135,17 +137,26 @@ def serialize(x, use_dask=True, fallback='pickle'):
     if isinstance(x, Serialized):
         return x.header, x.frames
 
-    if use_dask:
-        typ = type(x)
-        name = typename(typ)
-        if name in serializers:
-            header, frames = serializers[name](x)
-            header['type'] = name
-        elif _find_lazy_registration(name):
-            return serialize(x, use_dask, fallback)  # recurse
-    else:
-        header, frames = {'type': fallback}, [deser[fallback][0](x)]
-
+    serializers = serializers or ['dask', 'pickle']  # maybe a global option
+    header = None
+    for serializer in serializers:
+        if serializer == 'dask':
+            typ = type(x)
+            name = typename(typ)
+            if name in serializers:
+                header, frames = serializers[name](x)
+                header['type'] = name
+            elif _find_lazy_registration(name):
+                return serialize(x, serializers)  # recurse
+        else:
+            try:
+                header, frames = {'type': fallback}, [deser[fallback][0](x)]
+            except:
+                # this serializer failed somehow - try next one
+                # TODO: consider logging this event
+                continue
+    if header is None:
+        raise TypeError('Failed to serialize %s with %s' % (x, serializers))
     return header, frames
 
 

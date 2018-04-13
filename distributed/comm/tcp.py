@@ -208,13 +208,13 @@ class TCP(Comm):
             raise gen.Return(msg)
 
     @gen.coroutine
-    def write(self, msg):
+    def write(self, msg, serializers=None):
         stream = self.stream
         bytes_since_last_yield = 0
         if stream is None:
             raise CommClosedError
 
-        frames = yield to_frames(msg)
+        frames = yield to_frames(msg, serializers=serializers)
 
         try:
             lengths = ([struct.pack('Q', len(frames))] +
