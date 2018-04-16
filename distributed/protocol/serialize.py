@@ -16,8 +16,8 @@ from .compression import maybe_compress, decompress
 from .utils import unpack_frames, pack_frames_prelude, frame_split_size
 
 
-serializers = {}
-deserializers = {}
+class_serializers = {}
+class_deserializers = {}
 
 lazy_registrations = {}
 
@@ -66,8 +66,8 @@ def register_serialization(cls, serialize, deserialize):
         name = typename(cls)
     elif isinstance(cls, str):
         name = cls
-    serializers[name] = serialize
-    deserializers[name] = deserialize
+    class_serializers[name] = serialize
+    class_deserializers[name] = deserialize
 
 
 def register_serialization_lazy(toplevel, func):
@@ -143,14 +143,14 @@ def serialize(x, serializers=None):
         if serializer == 'dask':
             typ = type(x)
             name = typename(typ)
-            if name in serializers:
-                header, frames = serializers[name](x)
+            if name in class_serializers:
+                header, frames = class_serializers[name](x)
                 header['type'] = name
             elif _find_lazy_registration(name):
                 return serialize(x, serializers)  # recurse
         else:
             try:
-                header, frames = {'type': fallback}, [deser[fallback][0](x)]
+                header, frames = {'type': serializer}, [deser[serializer][0](x)]
             except:
                 # this serializer failed somehow - try next one
                 # TODO: consider logging this event
@@ -174,7 +174,7 @@ def deserialize(header, frames):
     serialize
     """
     name = header.get('type')
-    if name not in deserializers:
+    if name not in class_deserializers:
         if _find_lazy_registration(name):
             return deserialize(header, frames)  # recurse
     f = deser[header.get('type')][1]

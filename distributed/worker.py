@@ -522,7 +522,7 @@ class WorkerBase(ServerNode):
         raise Return('OK')
 
     @gen.coroutine
-    def get_data(self, comm, keys=None, who=None):
+    def get_data(self, comm, keys=None, who=None, serializers=None):
         start = time()
 
         msg = {k: to_serialize(self.data[k]) for k in keys if k in self.data}
@@ -532,7 +532,7 @@ class WorkerBase(ServerNode):
             self.digests['get-data-load-duration'].add(stop - start)
         start = time()
         try:
-            compressed = yield comm.write(msg)
+            compressed = yield comm.write(msg, serializers=serializers)
         except EnvironmentError:
             logger.exception('failed during get data with %s -> %s',
                              self.address, who, exc_info=True)

@@ -488,7 +488,7 @@ class Client(Node):
                  set_as_default=True, scheduler_file=None,
                  security=None, asynchronous=False,
                  name=None, heartbeat_interval=None,
-                 dask_serialize=True, fallback_serializer='pickle', **kwargs):
+                 serializers=None, **kwargs):
         if timeout == no_default:
             timeout = config.get('connect-timeout', '10s')
         if timeout is not None:
@@ -513,8 +513,7 @@ class Client(Node):
         self._lock = threading.Lock()
         self._refcount_lock = threading.Lock()
         self.datasets = Datasets(self)
-        self._dask_serialize = dask_serialize
-        self._fallback_serializer = fallback_serializer
+        self._serializers = serializers
 
         # Communication
         self.security = security or Security()
@@ -1401,7 +1400,8 @@ class Client(Node):
             if direct or local_worker:  # gather directly from workers
                 who_has = yield self.scheduler.who_has(keys=keys)
                 data2, missing_keys, missing_workers = yield gather_from_workers(
-                    who_has, rpc=self.rpc, close=False)
+                    who_has, rpc=self.rpc, close=False,
+                    serializers=self._serializers)
                 response = {'status': 'OK', 'data': data2}
                 if missing_keys:
                     keys2 = [key for key in keys if key not in data2]
