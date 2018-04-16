@@ -2248,7 +2248,7 @@ class Scheduler(ServerNode):
         raise gen.Return(keys)
 
     @gen.coroutine
-    def gather(self, comm=None, keys=None):
+    def gather(self, comm=None, keys=None, serializers=None):
         """ Collect data in from workers """
         keys = list(keys)
         who_has = {}
@@ -2260,7 +2260,7 @@ class Scheduler(ServerNode):
                 who_has[key] = []
 
         data, missing_keys, missing_workers = yield gather_from_workers(
-            who_has, rpc=self.rpc, close=False)
+            who_has, rpc=self.rpc, close=False, serializers=serializers)
         if not missing_keys:
             result = {'status': 'OK', 'data': data}
         else:

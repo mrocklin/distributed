@@ -1405,12 +1405,14 @@ class Client(Node):
                 response = {'status': 'OK', 'data': data2}
                 if missing_keys:
                     keys2 = [key for key in keys if key not in data2]
-                    response = yield self.scheduler.gather(keys=keys2)
+                    response = yield self.scheduler.gather(
+                        keys=keys2, serializers=self._serializers)
                     if response['status'] == 'OK':
                         response['data'].update(data2)
 
             else:  # ask scheduler to gather data for us
-                response = yield self.scheduler.gather(keys=keys)
+                response = yield self.scheduler.gather(
+                    keys=keys, serializers=self._serializers)
 
             if response['status'] == 'error':
                 logger.warning("Couldn't gather keys %s", response['keys'])
