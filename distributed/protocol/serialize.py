@@ -151,7 +151,7 @@ def serialize(x, serializers=None):
         else:
             try:
                 header, frames = {'type': serializer}, [deser[serializer][0](x)]
-            except:
+            except (TypeError, ValueError, NotImplementedError):
                 # this serializer failed somehow - try next one
                 # TODO: consider logging this event
                 continue
