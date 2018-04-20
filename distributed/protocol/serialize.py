@@ -1,5 +1,5 @@
 from __future__ import print_function, division, absolute_import
-
+import sys
 from functools import partial
 
 from dask.base import normalize_token
@@ -14,6 +14,7 @@ from . import pickle
 from ..compatibility import PY2
 from .compression import maybe_compress, decompress
 from .utils import unpack_frames, pack_frames_prelude, frame_split_size
+from ..utils import get_traceback
 
 
 class_serializers = {}
@@ -21,13 +22,48 @@ class_deserializers = {}
 
 lazy_registrations = {}
 
+
+def dask_dumps(x, serializers):
+    """Serialise object using the class-based registry"""
+    typ = type(x)
+    name = typename(typ)
+    if name in class_serializers:
+        header, frames = class_serializers[name](x)
+        header['type'] = name
+        return header, frames
+    elif _find_lazy_registration(name):
+        return serialize(x, serializers)  # recurse
+    else:
+        raise TypeError(name)
+
+
+def deserialise_error(msg):
+    from ..core import clean_exception
+    import six
+    exc = pickle.loads(msg)
+    six.reraise(*[type(exc['e']), exc['e'], exc['tb']])
+
+
 # generalist de-serialization for any object. The keys are the options
 # available for a comm channel or Client
-deser = {
- 'dask': None,  # this one is special, attempts special deser first
- 'pickle': (pickle.dumps, pickle.loads),
- 'msgpack': (msgpack.dumps, msgpack.loads)
+serializer_registry = {
+ 'dask': (dask_dumps, ),
+ 'error': (None, deserialise_error)
 }
+
+
+def register_simple_serialisation(name, dumps, loads):
+    """Register a simple serialization/deserialization pair
+
+    The dumps function must take an object and return bytes, and loads
+    must perform exactly the inverse.
+    """
+    serializer_registry[name] = (lambda x, s=None: ({'type': name}, [dumps(x)]),
+                                 lambda x: loads(x))
+
+
+register_simple_serialisation('pickle', pickle.dumps, pickle.loads)
+register_simple_serialisation('msgpack', msgpack.dumps, msgpack.loads)
 
 
 def register_serialization(cls, serialize, deserialize):
@@ -107,8 +143,8 @@ def serialize(x, serializers=None):
 
     The serialization protocols to use are configurable: a list of names
     define the set of serializers to use, in order. These names are keys in
-    the ``deser`` dict (e.g., 'pickle', 'msgpack'), which maps to the
-    de/serialize functions. The name 'dask' is special, and will use the
+    the ``serializer_registry`` dict (e.g., 'pickle', 'msgpack'), which maps
+    to the de/serialize functions. The name 'dask' is special, and will use the
     per-class serialization methods. ``None`` gives the default list
     ``['dask', 'pickle']``.
 
@@ -136,28 +172,20 @@ def serialize(x, serializers=None):
     """
     if isinstance(x, Serialized):
         return x.header, x.frames
+    if not serializers:
+        e = TypeError('No serializers passed')
 
     serializers = serializers or ['dask', 'pickle']  # maybe a global option
-    header = None
     for serializer in serializers:
-        if serializer == 'dask':
-            typ = type(x)
-            name = typename(typ)
-            if name in class_serializers:
-                header, frames = class_serializers[name](x)
-                header['type'] = name
-            elif _find_lazy_registration(name):
-                return serialize(x, serializers)  # recurse
-        else:
-            try:
-                header, frames = {'type': serializer}, [deser[serializer][0](x)]
-            except (TypeError, ValueError, NotImplementedError):
-                # this serializer failed somehow - try next one
-                # TODO: consider logging this event
-                continue
-    if header is None:
-        raise TypeError('Failed to serialize %s with %s' % (x, serializers))
-    return header, frames
+        try:
+            return serializer_registry[serializer][0](x, serializers)
+        except (TypeError, ValueError, NotImplementedError) as err:
+            # this serializer failed somehow - try next one
+            e = err
+            continue
+    # ran out of serializers
+    return {'type': 'error'}, [
+        pickle.dumps({'e': e, 'tb': sys.exc_info()[2]})]
 
 
 def deserialize(header, frames):
@@ -174,11 +202,15 @@ def deserialize(header, frames):
     serialize
     """
     name = header.get('type')
-    if name not in class_deserializers:
-        if _find_lazy_registration(name):
-            return deserialize(header, frames)  # recurse
-    f = deser[header.get('type')][1]
-    return f(b''.join(frames))
+    if name in class_deserializers:
+        # specific class-based serialisers
+        return class_deserializers[name](header, frames)
+    elif _find_lazy_registration(name):
+        # module imported, recurse to use it
+        return deserialize(header, frames)
+    else:
+        # fallback to simple serialisers
+        return serializer_registry[name][1](b''.join(frames))
 
 
 class Serialize(object):

@@ -36,7 +36,7 @@ register_serialization(MyObj, serialize_myobj, deserialize_myobj)
 def test_dumps_serialize():
     for x in [123, [1, 2, 3]]:
         header, frames = serialize(x)
-        assert not header
+        assert header['type'] == 'pickle'
         assert len(frames) == 1
 
         result = deserialize(header, frames)
