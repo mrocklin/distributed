@@ -14,7 +14,7 @@ from .utils import All, tokey
 
 
 @gen.coroutine
-def gather_from_workers(who_has, rpc, close=True, serializers=None):
+def gather_from_workers(who_has, rpc, close=True):
     """ Gather data directly from peers
 
     Parameters
@@ -55,8 +55,7 @@ def gather_from_workers(who_has, rpc, close=True, serializers=None):
 
         rpcs = {addr: rpc(addr) for addr in d}
         try:
-            coroutines = {address: rpcs[address].get_data(
-                keys=keys, close=close, serializers=serializers)
+            coroutines = {address: rpcs[address].get_data(keys=keys, close=close)
                           for address, keys in d.items()}
             response = {}
             for worker, c in coroutines.items():
@@ -126,6 +125,7 @@ def scatter_to_workers(ncores, data, rpc=rpc, report=True):
     finally:
         for r in rpcs.values():
             r.close_rpc()
+
     nbytes = merge(o['nbytes'] for o in out)
 
     who_has = {k: [w for w, _, _ in v] for k, v in groupby(1, L).items()}

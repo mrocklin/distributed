@@ -5274,6 +5274,9 @@ def test_turn_off_pickle(s, a, b):
     yield c.submit(np.ones, 5)
 
     # can send complex tasks (this uses pickle regardless)
+    with pytest.raises(TypeError):
+        future = yield c.scatter(inc)
+
     future = c.submit(lambda x: x, inc)
     yield wait(future)
 

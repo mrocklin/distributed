@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict, deque
 from concurrent.futures import CancelledError
 from functools import partial
+import inspect
 import logging
 import six
 import traceback
@@ -273,22 +274,28 @@ class Server(object):
                 if not isinstance(msg, dict):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
                                     + str(msg))
+
                 op = msg.pop('op')
                 if self.counters is not None:
                     self.counters['op'].add(op)
                 self._comms[comm] = op
+                serializers = msg.pop('serializers', None)
                 close_desired = msg.pop('close', False)
                 reply = msg.pop('reply', True)
                 if op == 'close':
                     if reply:
                         yield comm.write('OK')
                     break
+
                 try:
                     handler = self.handlers[op]
                 except KeyError:
                     logger.warning("No handler %s found in %s", op,
                                    type(self).__name__, exc_info=True)
                 else:
+                    if serializers is not None and 'serializers' in inspect.signature(handler).parameters:
+                        msg['serializers'] = serializers  # add back in
+
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
                         result = handler(comm, **msg)
@@ -302,9 +309,10 @@ class Server(object):
                     except Exception as e:
                         logger.exception(e)
                         result = error_message(e, status='uncaught-error')
+
                 if reply and result != 'dont-reply':
                     try:
-                        yield comm.write(result)
+                        yield comm.write(result, serializers=serializers)
                     except EnvironmentError as e:
                         logger.debug("Lost connection to %r while sending result for op %r: %s",
                                      address, op, e)
@@ -343,7 +351,7 @@ def pingpong(comm):
 
 
 @gen.coroutine
-def send_recv(comm, reply=True, deserialize=True, **kwargs):
+def send_recv(comm, reply=True, deserialize=True, serializers=None, **kwargs):
     """ Send and recv with a Comm.
 
     Keyword arguments turn into the message
@@ -354,9 +362,11 @@ def send_recv(comm, reply=True, deserialize=True, **kwargs):
     msg['reply'] = reply
     please_close = kwargs.get('close')
     force_close = False
+    if serializers is not None:
+        msg['serializers'] = serializers
 
     try:
-        yield comm.write(msg)
+        yield comm.write(msg, serializers=serializers)
         if reply:
             response = yield comm.read()
         else:
@@ -405,12 +415,13 @@ class rpc(object):
     address = None
 
     def __init__(self, arg=None, comm=None, deserialize=True, timeout=None,
-                 connection_args=None):
+                 connection_args=None, serializers=None):
         self.comms = {}
         self.address = coerce_to_address(arg)
         self.timeout = timeout
         self.status = 'running'
         self.deserialize = deserialize
+        self.serializers = serializers
         self.connection_args = connection_args
         rpc.active.add(self)
 
@@ -470,6 +481,8 @@ class rpc(object):
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
+            if self.serializers is not None and 'serializers' not in kwargs:
+                kwargs['serializers'] = self.serializers
             try:
                 comm = yield self.live_comm()
                 result = yield send_recv(comm=comm, op=key, **kwargs)
@@ -515,13 +528,16 @@ class PooledRPCCall(object):
         ConnectionPool
     """
 
-    def __init__(self, addr, pool):
+    def __init__(self, addr, pool, serializers=None):
         self.addr = addr
         self.pool = pool
+        self.serializers = serializers
 
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
+            if self.serializers is not None and 'serializers' not in kwargs:
+                kwargs['serializers'] = self.serializers
             comm = yield self.pool.connect(self.addr)
             try:
                 result = yield send_recv(comm=comm, op=key, **kwargs)
@@ -579,7 +595,7 @@ class ConnectionPool(object):
         Whether or not to deserialize data by default or pass it through
     """
 
-    def __init__(self, limit=512, deserialize=True, connection_args=None):
+    def __init__(self, limit=512, deserialize=True, serializers=None, connection_args=None):
         self.open = 0          # Total number of open comms
         self.active = 0        # Number of comms currently in use
         self.limit = limit     # Max number of open comms
@@ -588,6 +604,7 @@ class ConnectionPool(object):
         # Invariant: len(occupied) == active
         self.occupied = defaultdict(set)
         self.deserialize = deserialize
+        self.serializers = serializers
         self.connection_args = connection_args
         self.event = Event()
 
@@ -598,7 +615,7 @@ class ConnectionPool(object):
     def __call__(self, addr=None, ip=None, port=None):
         """ Cached rpc objects """
         addr = addr_from_args(addr=addr, ip=ip, port=port)
-        return PooledRPCCall(addr, self)
+        return PooledRPCCall(addr, self, serializers=self.serializers)
 
     @gen.coroutine
     def connect(self, addr, timeout=None):

@@ -575,7 +575,8 @@ class Client(Node):
         }
 
         super(Client, self).__init__(connection_args=self.connection_args,
-                                     io_loop=self.loop)
+                                     io_loop=self.loop,
+                                     serializers=serializers)
 
         self.start(timeout=timeout)
 
@@ -770,7 +771,8 @@ class Client(Node):
 
         if self.scheduler is None:
             self.scheduler = rpc(address, timeout=timeout,
-                                 connection_args=self.connection_args)
+                                 connection_args=self.connection_args,
+                                 serializers=self._serializers)
         self.scheduler_comm = None
 
         yield self._ensure_connected(timeout=timeout)
@@ -1400,19 +1402,16 @@ class Client(Node):
             if direct or local_worker:  # gather directly from workers
                 who_has = yield self.scheduler.who_has(keys=keys)
                 data2, missing_keys, missing_workers = yield gather_from_workers(
-                    who_has, rpc=self.rpc, close=False,
-                    serializers=self._serializers)
+                    who_has, rpc=self.rpc, close=False)
                 response = {'status': 'OK', 'data': data2}
                 if missing_keys:
                     keys2 = [key for key in keys if key not in data2]
-                    response = yield self.scheduler.gather(
-                        keys=keys2, serializers=self._serializers)
+                    response = yield self.scheduler.gather(keys=keys2)
                     if response['status'] == 'OK':
                         response['data'].update(data2)
 
             else:  # ask scheduler to gather data for us
-                response = yield self.scheduler.gather(
-                    keys=keys, serializers=self._serializers)
+                response = yield self.scheduler.gather(keys=keys)
 
             if response['status'] == 'error':
                 logger.warning("Couldn't gather keys %s", response['keys'])
