@@ -12,6 +12,7 @@ from distributed.protocol import (register_serialization, serialize,
                                   Serialized, to_serialize, serialize_bytes,
                                   deserialize_bytes, serialize_bytelist,)
 from distributed.utils import nbytes
+from distributed.utils_test import inc
 
 
 class MyObj(object):
@@ -212,3 +213,9 @@ def test_malicious_exception():
 
     assert "Sneaky" not in str(info.value)
     assert "BadException" in str(info.value)
+
+
+def test_msgpack_limitations():
+    msg = {'data': {'foo': to_serialize(inc)}}
+    header, frames = serialize(msg, serializers=['msgpack'])
+    assert header['serializer'] == 'error'

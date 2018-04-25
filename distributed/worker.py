@@ -478,7 +478,7 @@ class WorkerBase(ServerNode):
         return run(self, comm, function=function, args=args, kwargs=kwargs,
                    is_coro=True, wait=wait)
 
-    def update_data(self, comm=None, data=None, report=True):
+    def update_data(self, comm=None, data=None, report=True, serializers=None):
         for key, value in data.items():
             if key in self.task_state:
                 self.transition(key, 'memory', value=value)

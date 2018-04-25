@@ -60,16 +60,16 @@ def pickle_loads(header, frames):
 
 
 def msgpack_dumps(x):
-    return {'serializer': 'msgpack'}, [msgpack.dumps(x)]
+    return {'serializer': 'msgpack'}, [msgpack.dumps(x, use_bin_type=True)]
 
 
 def msgpack_loads(header, frames):
-    return msgpack.loads(b''.join(frames))
+    return msgpack.loads(b''.join(frames), encoding='utf8')
 
 
 def serialization_error_loads(header, frames):
     msg = "Could not serialize data."
-    msg = '\n'.join([msg] + list(frames))
+    msg = '\n'.join([msg] + [frame.decode('utf8') for frame in frames])
     raise TypeError(msg)
 
 
@@ -77,7 +77,7 @@ def serialization_error_loads(header, frames):
 serialize_functions = {
  'dask': (dask_dumps, dask_loads),
  'pickle': (pickle_dumps, pickle_loads),
- 'msgpack': (pickle_dumps, pickle_loads),
+ 'msgpack': (msgpack_dumps, msgpack_loads),
  'error': (None, serialization_error_loads),
 }
 
@@ -208,6 +208,8 @@ def serialize(x, serializers=None):
     frames = ["Could not serialize object of type %s" % type(x).__name__]
     if e:
         frames.append(e)
+
+    frames = [frame.encode() for frame in frames]
 
     # TODO: add stringified traceback
     return {'serializer': 'error'}, frames

@@ -481,7 +481,7 @@ class rpc(object):
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
-            if self.serializers is not None and 'serializers' not in kwargs:
+            if self.serializers is not None and kwargs.get('serializers') is None:
                 kwargs['serializers'] = self.serializers
             try:
                 comm = yield self.live_comm()
@@ -536,7 +536,7 @@ class PooledRPCCall(object):
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
-            if self.serializers is not None and 'serializers' not in kwargs:
+            if self.serializers is not None and kwargs.get('serializers') is None:
                 kwargs['serializers'] = self.serializers
             comm = yield self.pool.connect(self.addr)
             try:
