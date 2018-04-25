@@ -8,7 +8,6 @@ from .serialize import (
     serialize, deserialize, nested_deserialize, Serialize, Serialized,
     to_serialize, register_serialization, register_serialization_lazy,
     serialize_bytes, deserialize_bytes, serialize_bytelist,
-    register_simple_serialisation
 )
 
 from ..utils import ignoring

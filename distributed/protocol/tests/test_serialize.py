@@ -36,7 +36,7 @@ register_serialization(MyObj, serialize_myobj, deserialize_myobj)
 def test_dumps_serialize():
     for x in [123, [1, 2, 3]]:
         header, frames = serialize(x)
-        assert header['type'] == 'pickle'
+        assert header['serializer'] == 'pickle'
         assert len(frames) == 1
 
         result = deserialize(header, frames)
@@ -185,3 +185,30 @@ def test_serialize_list_compress():
     b = b''.join(L)
     y = deserialize_bytes(b)
     assert (x == y).all()
+
+
+def test_malicious_exception():
+    class BadException(Exception):
+        def __setstate__(self):
+            return Exception("Sneaky deserialization code")
+
+    class MyClass(object):
+        def __getstate__(self):
+            raise BadException()
+
+    obj = MyClass()
+
+    header, frames = serialize(obj, serializers=[])
+    with pytest.raises(Exception) as info:
+        deserialize(header, frames)
+
+    assert "Sneaky" not in str(info.value)
+    assert "MyClass" in str(info.value)
+
+
+    header, frames = serialize(obj, serializers=['pickle'])
+    with pytest.raises(Exception) as info:
+        deserialize(header, frames)
+
+    assert "Sneaky" not in str(info.value)
+    assert "BadException" in str(info.value)
