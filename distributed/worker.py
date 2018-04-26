@@ -16,9 +16,9 @@ import weakref
 from dask.core import istask
 from dask.compatibility import apply
 try:
-    from cytoolz import pluck
+    from cytoolz import pluck, partial
 except ImportError:
-    from toolz import pluck
+    from toolz import pluck, partial
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -144,7 +144,9 @@ class WorkerBase(ServerNode):
             except ImportError:
                 raise ImportError("Please `pip install zict` for spill-to-disk workers")
             path = os.path.join(self.local_dir, 'storage')
-            storage = Func(serialize_bytelist, deserialize_bytes, File(path))
+            storage = Func(partial(serialize_bytelist, on_error='raise'),
+                           deserialize_bytes,
+                           File(path))
             target = int(float(self.memory_limit) * self.memory_target_fraction)
             self.data = Buffer({}, storage, target, weight)
         else:

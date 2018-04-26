@@ -147,7 +147,7 @@ def _find_lazy_registration(typename):
         return False
 
 
-def serialize(x, serializers=None):
+def serialize(x, serializers=None, on_error='message'):
     r"""
     Convert object to a header and list of bytestrings
 
@@ -201,14 +201,18 @@ def serialize(x, serializers=None):
             e = repr(exc)
             continue
 
-    frames = ["Could not serialize object of type %s" % type(x).__name__]
-    if e:
-        frames.append(e)
+    msg = "Could not serialize object of type %s" % type(x).__name__
+    if on_error == 'message':
+        frames = [msg]
+        if e:
+            frames.append(e)
 
-    frames = [frame.encode() for frame in frames]
+        frames = [frame.encode() for frame in frames]
 
-    # TODO: add stringified traceback
-    return {'serializer': 'error'}, frames
+        # TODO: add stringified traceback
+        return {'serializer': 'error'}, frames
+    elif on_error == 'raise':
+        raise TypeError(msg)
 
 
 def deserialize(header, frames):
@@ -410,8 +414,8 @@ register_serialization(bytes, _serialize_bytes, _deserialize_bytes)
 register_serialization(bytearray, _serialize_bytes, _deserialize_bytes)
 
 
-def serialize_bytelist(x):
-    header, frames = serialize(x)
+def serialize_bytelist(x, **kwargs):
+    header, frames = serialize(x, **kwargs)
     frames = frame_split_size(frames)
     if frames:
         compression, frames = zip(*map(maybe_compress, frames))
@@ -425,8 +429,8 @@ def serialize_bytelist(x):
     return [pack_frames_prelude(frames2)] + frames2
 
 
-def serialize_bytes(x):
-    L = serialize_bytelist(x)
+def serialize_bytes(x, **kwargs):
+    L = serialize_bytelist(x, **kwargs)
     if PY2:
         L = [bytes(y) for y in L]
     return b''.join(L)
