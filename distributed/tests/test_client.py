@@ -5271,19 +5271,33 @@ def test_turn_off_pickle(s, a, b):
     c = yield Client(s.address, asynchronous=True,
                      serializers=['dask', 'msgpack'])
     try:
-        yield c.submit(inc, 1)
+        assert (yield c.submit(inc, 1)) == 2
         yield c.submit(np.ones, 5)
+        yield c.scatter(1)
 
-        # can send complex tasks (this uses pickle regardless)
+        # Can't send complex data
         with pytest.raises(TypeError):
             future = yield c.scatter(inc)
 
+        # can send complex tasks (this uses pickle regardless)
         future = c.submit(lambda x: x, inc)
         yield wait(future)
 
         # but can't receive complex results
         with pytest.raises(TypeError):
             yield future
+
+        # Run works
+        result = yield c.run(lambda: 1)
+        assert list(result.values()) == [1, 1]
+        result = yield c.run_on_scheduler(lambda: 1)
+        assert result == 1
+
+        # But not with complex return values
+        with pytest.raises(TypeError):
+            yield c.run(lambda: inc)
+        with pytest.raises(TypeError):
+            yield c.run_on_scheduler(lambda: inc)
     finally:
         yield c._close()
 

@@ -2364,7 +2364,7 @@ class Scheduler(ServerNode):
 
     @gen.coroutine
     def broadcast(self, comm=None, msg=None, workers=None, hosts=None,
-                  nanny=False):
+                  nanny=False, serializers=None):
         """ Broadcast message to workers, return all results """
         if workers is None:
             if hosts is None:
@@ -2387,7 +2387,7 @@ class Scheduler(ServerNode):
         def send_message(addr):
             comm = yield connect(addr, deserialize=self.deserialize,
                                  connection_args=self.connection_args)
-            resp = yield send_recv(comm, close=True, **msg)
+            resp = yield send_recv(comm, close=True, serializers=serializers, **msg)
             raise gen.Return(resp)
 
         results = yield All([send_message(self.coerce_address(address))
