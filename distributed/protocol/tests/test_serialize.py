@@ -206,7 +206,6 @@ def test_malicious_exception():
     assert "Sneaky" not in str(info.value)
     assert "MyClass" in str(info.value)
 
-
     header, frames = serialize(obj, serializers=['pickle'])
     with pytest.raises(Exception) as info:
         deserialize(header, frames)

@@ -1,5 +1,4 @@
 from __future__ import print_function, division, absolute_import
-import sys
 from functools import partial
 
 from dask.base import normalize_token
@@ -14,7 +13,6 @@ from . import pickle
 from ..compatibility import PY2
 from .compression import maybe_compress, decompress
 from .utils import unpack_frames, pack_frames_prelude, frame_split_size
-from ..utils import get_traceback
 
 
 class_serializers = {}
@@ -80,8 +78,6 @@ serialize_functions = {
  'msgpack': (msgpack_dumps, msgpack_loads),
  'error': (None, serialization_error_loads),
 }
-
-
 
 
 def register_serialization(cls, serialize, deserialize):
