@@ -5270,19 +5270,22 @@ def test_turn_off_pickle(s, a, b):
     import numpy as np
     c = yield Client(s.address, asynchronous=True,
                      serializers=['dask', 'msgpack'])
-    yield c.submit(inc, 1)
-    yield c.submit(np.ones, 5)
+    try:
+        yield c.submit(inc, 1)
+        yield c.submit(np.ones, 5)
 
-    # can send complex tasks (this uses pickle regardless)
-    with pytest.raises(TypeError):
-        future = yield c.scatter(inc)
+        # can send complex tasks (this uses pickle regardless)
+        with pytest.raises(TypeError):
+            future = yield c.scatter(inc)
 
-    future = c.submit(lambda x: x, inc)
-    yield wait(future)
+        future = c.submit(lambda x: x, inc)
+        yield wait(future)
 
-    # but can't receive complex results
-    with pytest.raises(TypeError):
-        yield future
+        # but can't receive complex results
+        with pytest.raises(TypeError):
+            yield future
+    finally:
+        yield c._close()
 
 
 if sys.version_info >= (3, 5):

@@ -66,8 +66,7 @@ def msgpack_loads(header, frames):
 
 
 def serialization_error_loads(header, frames):
-    msg = "Could not serialize data."
-    msg = '\n'.join([msg] + [frame.decode('utf8') for frame in frames])
+    msg = '\n'.join([frame.decode('utf8') for frame in frames])
     raise TypeError(msg)
 
 
