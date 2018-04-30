@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 from functools import partial
+import traceback
 
 from dask.base import normalize_token
 try:
@@ -188,7 +189,7 @@ def serialize(x, serializers=None, on_error='message'):
     if isinstance(x, Serialized):
         return x.header, x.frames
 
-    e = ''
+    tb = ''
 
     for name in serializers:
         dumps, loads = serialize_functions[name]
@@ -196,19 +197,18 @@ def serialize(x, serializers=None, on_error='message'):
             header, frames = dumps(x)
             header['serializer'] = name
             return header, frames
-        except Exception as exc:
-            e = repr(exc)
+        except Exception:
+            tb = traceback.format_exc()
             continue
 
     msg = "Could not serialize object of type %s" % type(x).__name__
     if on_error == 'message':
         frames = [msg]
-        if e:
-            frames.append(e)
+        if tb:
+            frames.append(tb[:100000])
 
         frames = [frame.encode() for frame in frames]
 
-        # TODO: add stringified traceback
         return {'serializer': 'error'}, frames
     elif on_error == 'raise':
         raise TypeError(msg)
