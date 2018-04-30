@@ -5302,5 +5302,24 @@ def test_turn_off_pickle(s, a, b):
         yield c._close()
 
 
+@gen_cluster()
+def test_de_serialization(s, a, b):
+    import numpy as np
+    c = yield Client(s.address, asynchronous=True,
+                     serializers=['msgpack', 'pickle'],
+                     deserializers=['msgpack'])
+    try:
+        # Can send complex data
+        future = yield c.scatter(np.ones(5))
+
+        # But can not retrieve it
+        with pytest.raises(TypeError):
+            result = yield future
+            import pdb; pdb.set_trace()
+            1 + 1
+    finally:
+        yield c._close()
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401

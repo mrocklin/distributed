@@ -351,7 +351,8 @@ def pingpong(comm):
 
 
 @gen.coroutine
-def send_recv(comm, reply=True, deserialize=True, serializers=None, **kwargs):
+def send_recv(comm, reply=True, deserialize=True, serializers=None,
+              deserializers=None, **kwargs):
     """ Send and recv with a Comm.
 
     Keyword arguments turn into the message
@@ -362,8 +363,10 @@ def send_recv(comm, reply=True, deserialize=True, serializers=None, **kwargs):
     msg['reply'] = reply
     please_close = kwargs.get('close')
     force_close = False
+    if deserializers is None:
+        deserializers = serializers
     if serializers is not None:
-        msg['serializers'] = serializers
+        msg['serializers'] = deserializers
 
     try:
         yield comm.write(msg, serializers=serializers, on_error='raise')
@@ -415,13 +418,14 @@ class rpc(object):
     address = None
 
     def __init__(self, arg=None, comm=None, deserialize=True, timeout=None,
-                 connection_args=None, serializers=None):
+                 connection_args=None, serializers=None, deserializers=None):
         self.comms = {}
         self.address = coerce_to_address(arg)
         self.timeout = timeout
         self.status = 'running'
         self.deserialize = deserialize
         self.serializers = serializers
+        self.deserializers = deserializers if deserializers is not None else serializers
         self.connection_args = connection_args
         rpc.active.add(self)
 
@@ -483,6 +487,8 @@ class rpc(object):
         def send_recv_from_rpc(**kwargs):
             if self.serializers is not None and kwargs.get('serializers') is None:
                 kwargs['serializers'] = self.serializers
+            if self.deserializers is not None and kwargs.get('deserializers') is None:
+                kwargs['deserializers'] = self.deserializers
             try:
                 comm = yield self.live_comm()
                 result = yield send_recv(comm=comm, op=key, **kwargs)
@@ -528,16 +534,19 @@ class PooledRPCCall(object):
         ConnectionPool
     """
 
-    def __init__(self, addr, pool, serializers=None):
+    def __init__(self, addr, pool, serializers=None, deserializers=None):
         self.addr = addr
         self.pool = pool
         self.serializers = serializers
+        self.deserializers = deserializers if deserializers is not None else serializers
 
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
             if self.serializers is not None and kwargs.get('serializers') is None:
                 kwargs['serializers'] = self.serializers
+            if self.deserializers is not None and kwargs.get('deserializers') is None:
+                kwargs['deserializers'] = self.deserializers
             comm = yield self.pool.connect(self.addr)
             try:
                 result = yield send_recv(comm=comm, op=key, **kwargs)
@@ -595,7 +604,11 @@ class ConnectionPool(object):
         Whether or not to deserialize data by default or pass it through
     """
 
-    def __init__(self, limit=512, deserialize=True, serializers=None, connection_args=None):
+    def __init__(self, limit=512,
+                 deserialize=True,
+                 serializers=None,
+                 deserializers=None,
+                 connection_args=None):
         self.open = 0          # Total number of open comms
         self.active = 0        # Number of comms currently in use
         self.limit = limit     # Max number of open comms
@@ -605,6 +618,7 @@ class ConnectionPool(object):
         self.occupied = defaultdict(set)
         self.deserialize = deserialize
         self.serializers = serializers
+        self.deserializers = deserializers if deserializers is not None else serializers
         self.connection_args = connection_args
         self.event = Event()
 
@@ -615,7 +629,9 @@ class ConnectionPool(object):
     def __call__(self, addr=None, ip=None, port=None):
         """ Cached rpc objects """
         addr = addr_from_args(addr=addr, ip=ip, port=port)
-        return PooledRPCCall(addr, self, serializers=self.serializers)
+        return PooledRPCCall(addr, self,
+                             serializers=self.serializers,
+                             deserializers=self.deserializers)
 
     @gen.coroutine
     def connect(self, addr, timeout=None):
