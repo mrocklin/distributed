@@ -18,6 +18,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
 
+from .compatibility import PY3
 from .comm import (connect, listen, CommClosedError,
                    normalize_address,
                    unparse_host_port, get_address_host_port)
@@ -293,7 +294,7 @@ class Server(object):
                     logger.warning("No handler %s found in %s", op,
                                    type(self).__name__, exc_info=True)
                 else:
-                    if serializers is not None and 'serializers' in inspect.signature(handler).parameters:
+                    if serializers is not None and has_serializers_keyword(handler):
                         msg['serializers'] = serializers  # add back in
 
                     logger.debug("Calling into handler %s", handler.__name__)
@@ -766,3 +767,11 @@ def clean_exception(exception, traceback, **kwargs):
     elif isinstance(traceback, string_types):
         traceback = None  # happens if the traceback failed serializing
     return type(exception), exception, traceback
+
+
+def has_serializers_keyword(func):
+    if PY3:
+        return 'serializers' in inspect.signature(func).parameters
+    else:
+        # https://stackoverflow.com/questions/50100498/determine-keywords-of-a-tornado-coroutine
+        return func.__name__ in ('update_data', 'get_data', 'gather', 'broadcast')

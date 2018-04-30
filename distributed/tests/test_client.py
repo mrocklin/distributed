@@ -5315,8 +5315,6 @@ def test_de_serialization(s, a, b):
         # But can not retrieve it
         with pytest.raises(TypeError):
             result = yield future
-            import pdb; pdb.set_trace()
-            1 + 1
     finally:
         yield c._close()
 
