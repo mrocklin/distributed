@@ -214,7 +214,14 @@ def test_malicious_exception():
     assert "BadException" in str(info.value)
 
 
-def test_msgpack_limitations():
+def test_errors():
     msg = {'data': {'foo': to_serialize(inc)}}
+
+    header, frames = serialize(msg, serializers=['msgpack', 'pickle'])
+    assert header['serializer'] == 'pickle'
+
     header, frames = serialize(msg, serializers=['msgpack'])
     assert header['serializer'] == 'error'
+
+    with pytest.raises(TypeError):
+        serialize(msg, serializers=['msgpack'], on_error='raise')

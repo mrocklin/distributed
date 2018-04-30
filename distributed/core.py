@@ -366,7 +366,7 @@ def send_recv(comm, reply=True, deserialize=True, serializers=None, **kwargs):
         msg['serializers'] = serializers
 
     try:
-        yield comm.write(msg, serializers=serializers)
+        yield comm.write(msg, serializers=serializers, on_error='raise')
         if reply:
             response = yield comm.read()
         else:

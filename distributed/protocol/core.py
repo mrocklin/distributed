@@ -21,7 +21,7 @@ _deserialize = deserialize
 logger = logging.getLogger(__name__)
 
 
-def dumps(msg, serializers=None):
+def dumps(msg, serializers=None, on_error='message'):
     """ Transform Python message to bytestream suitable for communication """
     try:
         data = {}
@@ -37,7 +37,9 @@ def dumps(msg, serializers=None):
                for key, value in data.items()
                if type(value) is Serialized}
 
-        data = {key: serialize(value.data, serializers=serializers)
+        data = {key: serialize(value.data,
+                               serializers=serializers,
+                               on_error=on_error)
                 for key, value in data.items()
                 if type(value) is Serialize}
 

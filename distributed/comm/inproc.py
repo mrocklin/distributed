@@ -192,7 +192,7 @@ class InProc(Comm):
         raise gen.Return(msg)
 
     @gen.coroutine
-    def write(self, msg, serializers=None):
+    def write(self, msg, serializers=None, on_error=None):
         if self.closed():
             raise CommClosedError
 
