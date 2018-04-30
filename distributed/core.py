@@ -366,7 +366,7 @@ def send_recv(comm, reply=True, deserialize=True, serializers=None,
     force_close = False
     if deserializers is None:
         deserializers = serializers
-    if serializers is not None:
+    if deserializers is not None:
         msg['serializers'] = deserializers
 
     try:
