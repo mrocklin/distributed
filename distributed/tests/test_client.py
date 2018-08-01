@@ -5433,5 +5433,27 @@ def test_scatter_error_cancel(c, s, a, b):
     assert y.status == 'error'  # not cancelled
 
 
+@gen_cluster(client=True)
+def test_numpy_separate_task(c, s, a, b):
+    np = pytest.importorskip('numpy')
+    x = np.random.random(1000000)
+    xx = dask.delayed(x)
+
+    y = c.compute(xx + 1)
+    yield wait(y)
+    assert (s.tasks[xx.key].run_spec.deserialize() == x).all()  # store directly
+
+@gen_cluster(client=True)
+def test_numpy_separate_task(c, s, a, b):
+    np = pytest.importorskip('numpy')
+    x = np.random.random(1000000)
+
+    z = c.submit(inc, x)
+    yield wait(z)
+
+    import pdb; pdb.set_trace()
+    1 + 1
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
