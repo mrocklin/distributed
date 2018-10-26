@@ -1,6 +1,25 @@
 Changelog
 =========
 
+1.24.0 - 2018-10-26
+-------------------
+
+-  Remove Joblib Dask Backend from codebase (#2298) `Matthew Rocklin`_
+-  Include worker tls protocol in Scheduler.restart (#2295) `Matthew Rocklin`_
+-  Adapt to new Bokeh selection for 1.0 (#2292) `Matthew Rocklin`_
+-  Add explicit retry method to Future and Client (#2299) `Matthew Rocklin`_
+-  Point to main worker page in bokeh links (#2300) `Matthew Rocklin`_
+-  Limit concurrency when gathering many times (#2303) `Matthew Rocklin`_
+-  Add tls_cluster pytest fixture (#2302) `Matthew Rocklin`_
+-  Convert ConnectionPool.open and active to properties (#2304) `Matthew Rocklin`_
+-  change export_tb to format_tb (#2306) `Eric Ma`_
+-  Redirect joblib page to dask-ml (#2307) `Matthew Rocklin`_
+-  Include unserializable object in error message (#2310) `Matthew Rocklin`_
+-  Import Mapping, Iterator, Set from collections.abc in Python 3 (#2315) `Gaurav Sheni`_
+-  Extend Client.scatter docstring (#2320) `Eric Ma`_
+-  Update for new flake8 (#2321)  `Matthew Rocklin`_
+
+
 1.23.3 - 2018-10-05
 -------------------
 
