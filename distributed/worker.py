@@ -573,7 +573,8 @@ class Worker(ServerNode):
             try:
                 _start = time()
                 comm = yield connect(self.scheduler.address,
-                                     connection_args=self.connection_args)
+                                     connection_args=self.connection_args,
+                                     name='worker-scheduler')
                 yield comm.write(dict(op='register-worker',
                                       reply=False,
                                       address=self.contact_address,
@@ -904,7 +905,8 @@ class Worker(ServerNode):
             @gen.coroutine
             def batched_send_connect():
                 comm = yield connect(address,  # TODO, serialization
-                                     connection_args=self.connection_args)
+                                     connection_args=self.connection_args,
+                                     name='worker-worker-batched')
                 yield comm.write({'op': 'connection_stream'})
 
                 bcomm.start(comm)

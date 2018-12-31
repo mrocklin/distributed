@@ -157,7 +157,7 @@ class Connector(with_metaclass(ABCMeta)):
 
 
 @gen.coroutine
-def connect(addr, timeout=None, deserialize=True, connection_args=None):
+def connect(addr, timeout=None, deserialize=True, connection_args=None, name=None):
     """
     Connect to the given address (a URI such as ``tcp://127.0.0.1:1234``)
     and yield a ``Comm`` object.  If the connection attempt fails, it is
@@ -202,6 +202,7 @@ def connect(addr, timeout=None, deserialize=True, connection_args=None):
         else:
             break
 
+    comm.name = name
     raise gen.Return(comm)
 
 

@@ -885,7 +885,8 @@ class Client(Node):
 
         try:
             comm = yield connect(self.scheduler.address, timeout=timeout,
-                                 connection_args=self.connection_args)
+                                 connection_args=self.connection_args,
+                                 name="client-scheduler")
             if timeout is not None:
                 yield gen.with_timeout(timedelta(seconds=timeout),
                                        self._update_scheduler_info())

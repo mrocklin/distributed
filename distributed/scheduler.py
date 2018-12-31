@@ -2440,7 +2440,8 @@ class Scheduler(ServerNode):
         @gen.coroutine
         def send_message(addr):
             comm = yield connect(addr, deserialize=self.deserialize,
-                                 connection_args=self.connection_args)
+                                 connection_args=self.connection_args,
+                                 name="scheduler-broadcast")
             resp = yield send_recv(comm, close=True, serializers=serializers, **msg)
             raise gen.Return(resp)
 

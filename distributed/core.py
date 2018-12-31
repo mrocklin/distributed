@@ -548,7 +548,8 @@ class rpc(object):
         if not open or comm.closed():
             comm = yield connect(self.address, self.timeout,
                                  deserialize=self.deserialize,
-                                 connection_args=self.connection_args)
+                                 connection_args=self.connection_args,
+                                 name="rpc")
         self.comms[comm] = False     # mark as taken
         raise gen.Return(comm)
 
@@ -750,7 +751,8 @@ class ConnectionPool(object):
         try:
             comm = yield connect(addr, timeout=timeout,
                                  deserialize=self.deserialize,
-                                 connection_args=self.connection_args)
+                                 connection_args=self.connection_args,
+                                 name="connection-pool")
         except Exception:
             raise
         occupied.add(comm)

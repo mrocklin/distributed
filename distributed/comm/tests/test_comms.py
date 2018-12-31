@@ -15,7 +15,7 @@ from distributed.metrics import time
 from distributed.utils import get_ip, get_ipv6
 from distributed.utils_test import (gen_test, requires_ipv6, has_ipv6,
                                     get_cert, get_server_ssl_context,
-                                    get_client_ssl_context)
+                                    get_client_ssl_context, gen_cluster)
 from distributed.utils_test import loop  # noqa: F401
 
 from distributed.protocol import (to_serialize, Serialized, serialize,
@@ -1085,3 +1085,9 @@ def test_tls_adresses():
 def test_inproc_adresses():
     a, b = yield get_inproc_comm_pair()
     yield check_addresses(a, b)
+
+
+@gen_cluster(client=True)
+def test_comm_names(c, s, a, b):
+    assert 'client' in c.scheduler_comm.comm.name
+    assert 'scheduler' in c.scheduler_comm.comm.name
