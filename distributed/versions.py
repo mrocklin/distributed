@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+from collections import defaultdict
 import platform
 import struct
 import os
@@ -9,7 +10,7 @@ import sys
 import locale
 import importlib
 
-from .utils import ignoring
+from .utils import ignoring, asciitable
 
 
 required_packages = [
@@ -98,4 +99,34 @@ def get_package_info(pkgs):
         except Exception:
             pversions.append((modname, None))
 
-    return pversions
+    return dict(pversions)
+
+
+def error_message(scheduler, workers, client):
+    # we care about the required & optional packages matching
+    def to_packages(d):
+        L = [list(d.items()) for d in d["packages"].values()]
+
+        return dict(sum(L, type(L[0])()))
+
+    client_versions = to_packages(client)
+    versions = [("scheduler", to_packages(scheduler))]
+    versions.extend((w, to_packages(d)) for w, d in sorted(workers.items()))
+
+    mismatched = defaultdict(list)
+    for name, vers in versions:
+        for pkg, cv in client_versions.items():
+            v = vers.get(pkg, "MISSING")
+            if cv != v:
+                mismatched[pkg].append((name, v))
+
+    if mismatched:
+        errs = []
+        for pkg, versions in sorted(mismatched.items()):
+            rows = [("client", client_versions[pkg])]
+            rows.extend(versions)
+            errs.append("%s\n%s" % (pkg, asciitable(["", "version"], rows)))
+
+        return "Mismatched versions found\n" "\n" "%s" % ("\n\n".join(errs))
+    else:
+        return ""

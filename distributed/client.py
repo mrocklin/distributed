@@ -83,7 +83,6 @@ from .utils import (
     str_graph,
     key_split,
     format_bytes,
-    asciitable,
     thread_state,
     no_default,
     PeriodicCallback,
@@ -92,7 +91,7 @@ from .utils import (
     shutting_down,
     Any,
 )
-from .versions import get_versions
+from . import versions
 
 
 logger = logging.getLogger(__name__)
@@ -3509,7 +3508,7 @@ class Client(Node):
 
         >>> c.get_versions(packages=['sklearn', 'geopandas'])  # doctest: +SKIP
         """
-        client = get_versions(packages=packages)
+        client = versions.get_versions(packages=packages)
         try:
             scheduler = sync(self.loop, self.scheduler.versions, packages=packages)
         except KeyError:
@@ -3525,32 +3524,9 @@ class Client(Node):
         result = {"scheduler": scheduler, "workers": workers, "client": client}
 
         if check:
-            # we care about the required & optional packages matching
-            def to_packages(d):
-                L = list(d["packages"].values())
-                return dict(sum(L, type(L[0])()))
-
-            client_versions = to_packages(result["client"])
-            versions = [("scheduler", to_packages(result["scheduler"]))]
-            versions.extend((w, to_packages(d)) for w, d in sorted(workers.items()))
-
-            mismatched = defaultdict(list)
-            for name, vers in versions:
-                for pkg, cv in client_versions.items():
-                    v = vers.get(pkg, "MISSING")
-                    if cv != v:
-                        mismatched[pkg].append((name, v))
-
-            if mismatched:
-                errs = []
-                for pkg, versions in sorted(mismatched.items()):
-                    rows = [("client", client_versions[pkg])]
-                    rows.extend(versions)
-                    errs.append("%s\n%s" % (pkg, asciitable(["", "version"], rows)))
-
-                raise ValueError(
-                    "Mismatched versions found\n" "\n" "%s" % ("\n\n".join(errs))
-                )
+            msg = versions.error_message(scheduler, workers, client)
+            if msg:
+                raise ValueError(msg)
 
         return result
 

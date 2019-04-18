@@ -65,6 +65,7 @@ from .utils import (
 )
 from .utils_comm import pack_data, gather_from_workers
 from .utils_perf import ThrottledGC, enable_gc_diagnosis, disable_gc_diagnosis
+from .versions import get_versions
 
 _ncores = mp_context.cpu_count()
 
@@ -690,6 +691,7 @@ class Worker(ServerNode):
                         services=self.service_ports,
                         pid=os.getpid(),
                         metrics=self.get_metrics(),
+                        versions=get_versions(),
                     ),
                     serializers=["msgpack"],
                 )
