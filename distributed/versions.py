@@ -41,11 +41,11 @@ def get_versions(packages=None):
 
     d = {
         "host": get_system_info(),
-        "packages": {
-            "required": get_package_info(required_packages),
-            "optional": get_package_info(optional_packages + list(packages)),
-        },
+        "packages": get_package_info(
+            required_packages + optional_packages + list(packages)
+        ),
     }
+
     return d
 
 
@@ -104,14 +104,9 @@ def get_package_info(pkgs):
 
 def error_message(scheduler, workers, client):
     # we care about the required & optional packages matching
-    def to_packages(d):
-        L = [list(d.items()) for d in d["packages"].values()]
-
-        return dict(sum(L, type(L[0])()))
-
-    client_versions = to_packages(client)
-    versions = [("scheduler", to_packages(scheduler))]
-    versions.extend((w, to_packages(d)) for w, d in sorted(workers.items()))
+    client_versions = client["packages"]
+    versions = [("scheduler", scheduler["packages"])]
+    versions.extend((w, d["packages"]) for w, d in sorted(workers.items()))
 
     mismatched = defaultdict(list)
     for name, vers in versions:
