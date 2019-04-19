@@ -104,9 +104,16 @@ def get_package_info(pkgs):
 
 def error_message(scheduler, workers, client):
     # we care about the required & optional packages matching
-    client_versions = client["packages"]
-    versions = [("scheduler", scheduler["packages"])]
-    versions.extend((w, d["packages"]) for w, d in sorted(workers.items()))
+    try:
+        client_versions = client["packages"]
+        versions = [("scheduler", scheduler["packages"])]
+        versions.extend((w, d["packages"]) for w, d in sorted(workers.items()))
+    except KeyError:
+        return (
+            "Version mismatch for dask.distributed. "
+            "The scheduler has version >= 1.28.0 "
+            "but some other component is less than this"
+        )
 
     mismatched = defaultdict(list)
     for name, vers in versions:
