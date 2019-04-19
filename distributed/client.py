@@ -1011,6 +1011,9 @@ class Client(Node):
         assert len(msg) == 1
         assert msg[0]["op"] == "stream-start"
 
+        if msg[0].get("warning"):
+            warnings.warn(msg[0]["warning"])
+
         bcomm = BatchedSend(interval="10ms", loop=self.loop)
         bcomm.start(comm)
         self.scheduler_comm = bcomm
