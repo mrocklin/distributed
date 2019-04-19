@@ -1378,6 +1378,7 @@ class Scheduler(ServerNode):
                 name=name,
                 local_directory=local_directory,
                 services=services,
+                versions=versions,
             )
 
             if name in self.aliases:

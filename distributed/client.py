@@ -995,7 +995,12 @@ class Client(Node):
             else:
                 yield self._update_scheduler_info()
             yield comm.write(
-                {"op": "register-client", "client": self.id, "reply": False}
+                {
+                    "op": "register-client",
+                    "client": self.id,
+                    "reply": False,
+                    "versions": versions.get_versions(),
+                }
             )
         finally:
             self._connecting_to_scheduler = False

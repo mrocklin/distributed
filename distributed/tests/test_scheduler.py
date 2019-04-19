@@ -1496,3 +1496,14 @@ def test_gh2187(c, s, a, b):
     yield gen.sleep(0.1)
     f = c.submit(bar, x, key="y")
     yield f
+
+
+@gen_cluster(client=True)
+def test_collect_versions(c, s, a, b):
+    cs = s.clients[c.id]
+    (w1, w2) = s.workers.values()
+    assert cs.versions
+    assert w1.versions
+    assert w2.versions
+    assert "dask" in str(cs.versions)
+    assert cs.versions == w1.versions == w2.versions
