@@ -702,6 +702,10 @@ class Worker(ServerNode):
                         continue
                     future = gen.with_timeout(timedelta(seconds=diff), future)
                 response = yield future
+
+                if response.get("warning"):
+                    warnings.warn(response["warning"])
+
                 _end = time()
                 middle = (_start + _end) / 2
                 self.scheduler_delay = response["time"] - middle

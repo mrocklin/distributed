@@ -1448,14 +1448,26 @@ class Scheduler(ServerNode):
             self.log_event("all", {"action": "add-worker", "worker": address})
             logger.info("Register %s", str(address))
 
-            yield comm.write(
-                {
-                    "status": "OK",
-                    "time": time(),
-                    "heartbeat-interval": heartbeat_interval(len(self.workers)),
-                    "worker-setups": self.worker_setups,
-                }
+            msg = {
+                "status": "OK",
+                "time": time(),
+                "heartbeat-interval": heartbeat_interval(len(self.workers)),
+                "worker-setups": self.worker_setups,
+            }
+
+            version_warning = version_module.error_message(
+                version_module.get_versions(),
+                merge(
+                    {w: ws.versions for w, ws in self.workers.items()},
+                    {c: cs.versions for c, cs in self.clients.items() if cs.versions},
+                ),
+                versions,
+                client_name="This Worker",
             )
+            if version_warning:
+                msg["warning"] = version_warning
+
+            yield comm.write(msg)
             yield self.handle_worker(comm=comm, worker=address)
 
     def update_graph(

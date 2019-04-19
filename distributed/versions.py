@@ -102,7 +102,7 @@ def get_package_info(pkgs):
     return dict(pversions)
 
 
-def error_message(scheduler, workers, client):
+def error_message(scheduler, workers, client, client_name="client"):
     # we care about the required & optional packages matching
     try:
         client_versions = client["packages"]
@@ -125,7 +125,7 @@ def error_message(scheduler, workers, client):
     if mismatched:
         errs = []
         for pkg, versions in sorted(mismatched.items()):
-            rows = [("client", client_versions[pkg])]
+            rows = [(client_name, client_versions[pkg])]
             rows.extend(versions)
             errs.append("%s\n%s" % (pkg, asciitable(["", "version"], rows)))
 

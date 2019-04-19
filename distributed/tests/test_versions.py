@@ -1,6 +1,6 @@
 import pytest
 
-from dask.distributed import Client
+from dask.distributed import Client, Worker
 from distributed.versions import get_versions, error_message
 from distributed.utils_test import gen_cluster
 
@@ -24,6 +24,15 @@ def test_warning(s, a, b):
         client = yield Client(s.address, asynchronous=True)
 
     assert record
+    assert any("dask" in str(r.message) for r in record)
+    assert any("0.0.0" in str(r.message) for r in record)
+    assert any(a.address in str(r.message) for r in record)
+
+    with pytest.warns(None) as record:
+        w = yield Worker(s.address)
+
+    assert record
+    assert any("This Worker" in str(r.message) for r in record)
     assert any("dask" in str(r.message) for r in record)
     assert any("0.0.0" in str(r.message) for r in record)
     assert any(a.address in str(r.message) for r in record)
