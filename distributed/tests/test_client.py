@@ -3843,7 +3843,7 @@ def test_get_versions(c):
     # that this does not raise
 
     v = c.get_versions(packages=["requests"])
-    assert dict(v["client"]["packages"]["optional"])["requests"] == requests.__version__
+    assert v["client"]["packages"]["requests"] == requests.__version__
 
 
 def test_threaded_get_within_distributed(c):
