@@ -407,8 +407,8 @@ def test_delete(c, s, a):
 def test_filtered_communication(s, a, b):
     c = yield connect(s.address)
     f = yield connect(s.address)
-    yield c.write({"op": "register-client", "client": "c"})
-    yield f.write({"op": "register-client", "client": "f"})
+    yield c.write({"op": "register-client", "client": "c", "versions": {}})
+    yield f.write({"op": "register-client", "client": "f", "versions": {}})
     yield c.read()
     yield f.read()
 
