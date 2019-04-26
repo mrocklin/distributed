@@ -102,10 +102,11 @@ def get_package_info(pkgs):
     return dict(pversions)
 
 
-def error_message(scheduler, workers, client, client_name="client"):
+def error_message(scheduler, workers, this, name="client"):
+    this_name = name
     # we care about the required & optional packages matching
     try:
-        client_versions = client["packages"]
+        this_versions = this["packages"]
         versions = [("scheduler", scheduler["packages"])]
         versions.extend((w, d["packages"]) for w, d in sorted(workers.items()))
     except KeyError:
@@ -117,7 +118,7 @@ def error_message(scheduler, workers, client, client_name="client"):
 
     mismatched = defaultdict(list)
     for name, vers in versions:
-        for pkg, cv in client_versions.items():
+        for pkg, cv in this_versions.items():
             v = vers.get(pkg, "MISSING")
             if cv != v:
                 mismatched[pkg].append((name, v))
@@ -125,10 +126,23 @@ def error_message(scheduler, workers, client, client_name="client"):
     if mismatched:
         errs = []
         for pkg, versions in sorted(mismatched.items()):
-            rows = [(client_name, client_versions[pkg])]
+            rows = [(this_name, this_versions[pkg])]
             rows.extend(versions)
             errs.append("%s\n%s" % (pkg, asciitable(["", "version"], rows)))
 
         return "Mismatched versions found\n" "\n" "%s" % ("\n\n".join(errs))
     else:
         return ""
+
+
+class VersionMismatchWarning(Warning):
+    """ Indicates version mistmatch between Dask nodes """
+
+    def __init__(self, scheduler, workers, this, name="Client"):
+        self.scheduler = scheduler
+        self.workers = workers
+        self.this = this
+        self.name = name
+
+    def __str__(self):
+        return error_message(self.scheduler, self.workers, self.this, self.name)

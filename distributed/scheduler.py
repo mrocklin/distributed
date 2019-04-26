@@ -1455,17 +1455,25 @@ class Scheduler(ServerNode):
                 "worker-setups": self.worker_setups,
             }
 
-            version_warning = version_module.error_message(
-                version_module.get_versions(),
-                merge(
-                    {w: ws.versions for w, ws in self.workers.items()},
-                    {c: cs.versions for c, cs in self.clients.items() if cs.versions},
-                ),
-                versions,
-                client_name="This Worker",
-            )
-            if version_warning:
-                msg["warning"] = version_warning
+            if versions:
+                version_kwargs = {
+                    "scheduler": version_module.get_versions(),
+                    "workers": merge(
+                        {w: ws.versions for w, ws in self.workers.items()},
+                        {
+                            c: cs.versions
+                            for c, cs in self.clients.items()
+                            if cs.versions
+                        },
+                    ),
+                    "this": versions,
+                    "name": "This Worker",
+                }
+
+                if version_module.error_message(**version_kwargs):
+                    msg["version-warning"] = version_kwargs
+            else:
+                msg["warning"] = "Version mismatch of the dask.distributed library"
 
             yield comm.write(msg)
             yield self.handle_worker(comm=comm, worker=address)
@@ -2188,13 +2196,19 @@ class Scheduler(ServerNode):
             bcomm.start(comm)
             self.client_comms[client] = bcomm
             msg = {"op": "stream-start"}
-            version_warning = version_module.error_message(
-                version_module.get_versions(),
-                {w: ws.versions for w, ws in self.workers.items()},
-                versions,
-            )
-            if version_warning:
-                msg["warning"] = version_warning
+
+            if versions:
+                version_kwargs = {
+                    "scheduler": version_module.get_versions(),
+                    "workers": {w: ws.versions for w, ws in self.workers.items()},
+                    "this": versions,
+                    "name": "Client",
+                }
+
+                if version_module.error_message(**version_kwargs):
+                    msg["version-warning"] = version_kwargs
+            else:
+                msg["warning"] = "Version mismatch of the dask.distributed library"
             bcomm.send(msg)
 
             try:

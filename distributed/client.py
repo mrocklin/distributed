@@ -1011,6 +1011,8 @@ class Client(Node):
         assert len(msg) == 1
         assert msg[0]["op"] == "stream-start"
 
+        if msg[0].get("version-warning"):
+            warnings.warn(versions.VersionMismatchWarning(**msg[0]["version-warning"]))
         if msg[0].get("warning"):
             warnings.warn(msg[0]["warning"])
 
