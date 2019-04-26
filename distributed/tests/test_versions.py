@@ -28,11 +28,8 @@ def test_warning(s, a, b):
     assert any("0.0.0" in str(r.message) for r in record)
     assert any(a.address in str(r.message) for r in record)
 
-    with pytest.warns(None) as record:
-        w = yield Worker(s.address)
+    w = yield Worker(s.address)
 
-    assert record
-    assert any("This Worker" in str(r.message) for r in record)
-    assert any("dask" in str(r.message) for r in record)
-    assert any("0.0.0" in str(r.message) for r in record)
-    assert any(a.address in str(r.message) for r in record)
+    assert any("This Worker" in line.message for line in w.logs)
+    assert any("dask" in line.message for line in w.logs)
+    assert any("0.0.0" in line.message and a.address in line.message for line in w.logs)

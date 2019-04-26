@@ -629,6 +629,10 @@ class Worker(ServerNode):
         finalize(self, logger.removeHandler, self._deque_handler)
 
     @property
+    def logs(self):
+        return self._deque_handler.deque
+
+    @property
     def worker_address(self):
         """ For API compatibility with Nanny """
         return self.address
@@ -704,7 +708,7 @@ class Worker(ServerNode):
                 response = yield future
 
                 if response.get("warning"):
-                    warnings.warn(response["warning"])
+                    logger.warning(response["warning"])
 
                 _end = time()
                 middle = (_start + _end) / 2
