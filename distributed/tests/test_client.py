@@ -3321,7 +3321,12 @@ def test_get_foo_lost_keys(c, s, u, v, w):
 
 
 @pytest.mark.slow
-@gen_cluster(client=True, Worker=Nanny, check_new_threads=False)
+@gen_cluster(
+    client=True,
+    Worker=Nanny,
+    check_new_threads=False,
+    worker_kwargs={"death_timeout": "500ms"},
+)
 def test_bad_tasks_fail(c, s, a, b):
     f = c.submit(sys.exit, 1)
     with pytest.raises(KilledWorker) as info:
@@ -3575,24 +3580,29 @@ def test_reconnect_timeout(c, s):
 @pytest.mark.skipif(
     sys.version_info[0] == 2, reason="Semaphore.acquire doesn't support timeout option"
 )
-@pytest.mark.xfail(reason="TODO: intermittent failures")
+# @pytest.mark.xfail(reason="TODO: intermittent failures")
 @pytest.mark.parametrize("worker,count,repeat", [(Worker, 100, 5), (Nanny, 10, 20)])
 def test_open_close_many_workers(loop, worker, count, repeat):
     psutil = pytest.importorskip("psutil")
     proc = psutil.Process()
 
-    with cluster(nworkers=0, active_rpc_timeout=20) as (s, _):
+    with cluster(nworkers=0, active_rpc_timeout=2) as (s, _):
         gc.collect()
         before = proc.num_fds()
         done = Semaphore(0)
         running = weakref.WeakKeyDictionary()
+        workers = set()
+        status = True
 
         @gen.coroutine
         def start_worker(sleep, duration, repeat=1):
             for i in range(repeat):
                 yield gen.sleep(sleep)
+                if not status:
+                    return
                 w = worker(s["address"], loop=loop)
                 running[w] = None
+                workers.add(w)
                 yield w
                 addr = w.worker_address
                 running[w] = addr
@@ -3620,6 +3630,12 @@ def test_open_close_many_workers(loop, worker, count, repeat):
             while c.ncores():
                 sleep(0.2)
                 assert time() < start + 10
+
+            status = False
+
+            [c.sync(w.close) for w in list(workers)]
+            for w in workers:
+                assert w.status == "closed"
 
     start = time()
     while proc.num_fds() > before:
@@ -4235,20 +4251,20 @@ def test_client_timeout():
     loop = IOLoop.current()
     c = Client("127.0.0.1:57484", asynchronous=True)
 
-    s = Scheduler(loop=loop)
+    s = Scheduler(loop=loop, port=57484)
     yield gen.sleep(4)
     try:
-        s.start(("127.0.0.1", 57484))
+        yield s
     except EnvironmentError:  # port in use
         return
 
     start = time()
-    while not c.scheduler_comm:
-        yield gen.sleep(0.1)
+    yield c
+    try:
         assert time() < start + 2
-
-    yield c.close()
-    yield s.close()
+    finally:
+        yield c.close()
+        yield s.close()
 
 
 @gen_cluster(client=True)
