@@ -141,6 +141,9 @@ def serialize(x, serializers=None, on_error="message", context=None):
 
     for name in serializers:
         dumps, loads, wants_context = families[name]
+        
+        #import pdb; pdb.set_trace()
+
         try:
             header, frames = dumps(x, context=context) if wants_context else dumps(x)
             header["serializer"] = name
