@@ -18,12 +18,14 @@ def serialize_cudf_dataframe(x):
     null_masks = []
     null_headers = []
     null_counts = {}
+    n_string_columns = 0
 
     for label, col in x.iteritems():
         try:
             # Non-string data
             header, [frame] = serialize_numba_ndarray(col.data.mem)
             header["name"] = label
+            header["string"] = None
             sub_headers.append(header)
             arrays.append(frame)
 
@@ -35,16 +37,19 @@ def serialize_cudf_dataframe(x):
             values = np.empty(s.size(), dtype=np.int8)
             offsets = np.empty(s.size()+1, dtype=np.int32)
             s.to_offsets(values,offsets)
-            for item in [values,offsets]:
+            n_string_columns += 1
+            for i, item in enumerate([values, offsets]):
                 item_ndarray = cuda.to_device(item)
                 header, [frame] = serialize_numba_ndarray(item_ndarray)
                 header["name"] = label
+                header["string"] = i
                 sub_headers.append(header)
                 arrays.append(frame)
 
         if col.null_count:
             header, [frame] = serialize_numba_ndarray(col.nullmask.mem)
             header["name"] = label
+            header["string"] = None
             null_headers.append(header)
             null_masks.append(frame)
             null_counts[label] = col.null_count
@@ -58,6 +63,7 @@ def serialize_cudf_dataframe(x):
         "columns": x.columns.tolist(),
         "null_counts": null_counts,
         "null_subheaders": null_headers,
+        "n_string_columns": n_string_columns
     }
 
     return header, arrays
@@ -68,22 +74,24 @@ def deserialize_cudf_dataframe(header, frames):
     columns = header["columns"]
     n_columns = len(header["columns"])
     n_masks = len(header["null_subheaders"])
+    n_string_columns = header["n_string_columns"]
 
     masks = {}
     pairs = []
 
     #import pdb; pdb.set_trace()
-    #print(n_columns)
-    #print(len(frames))
-    #print(header["subheaders"])
+    print(n_columns)
+    print(len(frames))
+    print(header["subheaders"])
 
     for i in range(n_masks):
         subheader = header["null_subheaders"][i]
-        frame = frames[n_columns + i]
+        frame = frames[n_columns + n_string_columns + i]
         mask = deserialize_numba_ndarray(subheader, [frame])
         masks[subheader["name"]] = mask
 
-    for subheader, frame in zip(header["subheaders"], frames[:n_columns]):
+    for subheader, frame in zip(header["subheaders"],
+                                frames[:(n_columns + n_string_columns)]):
         name = subheader["name"]
         array = deserialize_numba_ndarray(subheader, [frame])
 
@@ -111,11 +119,13 @@ def serialize_cudf_series(x):
     sub_headers.append(header)
     arrays.append(frame)
 
-    # Serialize index (not sure how to do this yet..)
-    #header, [frame] = serialize_numba_ndarray(x.index)
-    #header["name"] = label
-    #sub_headers.append(header)
-    #arrays.append(frame)
+    # Serialize index
+    import numba.cuda as cuda
+    ndarray = cuda.to_device(x.index)
+    header, [frame] = serialize_numba_ndarray(ndarray)
+    header["name"] = label
+    sub_headers.append(header)
+    arrays.append(frame)
 
     # Serialize null mask
     if x.null_count:
@@ -149,7 +159,7 @@ def deserialize_cudf_series(header, frames):
 
     for i in range(n_masks):
         subheader = header["null_subheaders"][i]
-        frame = frames[n_columns + i]
+        frame = frames[n_columns*2 + i]
         mask = deserialize_numba_ndarray(subheader, [frame])
         masks[subheader["name"]] = mask
 
@@ -157,6 +167,8 @@ def deserialize_cudf_series(header, frames):
     frame = frames[0]
     name = subheader["name"]
     array = deserialize_numba_ndarray(subheader, [frame])
+
+    # TODO: Deserialize index
 
     if name in masks:
         series = cudf.Series.from_masked_array(array, masks[name])
