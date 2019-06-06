@@ -20,6 +20,11 @@ def serialize_cudf_dataframe(x):
     null_counts = {}
     n_string_columns = 0
 
+    # Reset index so it can be serialized
+    # TODO: make sure we are not overwriting a column named "index"
+    serialize_index = True
+    x = x.reset_index()
+
     for label, col in x.iteritems():
         try:
             # Non-string data
@@ -63,7 +68,8 @@ def serialize_cudf_dataframe(x):
         "columns": x.columns.tolist(),
         "null_counts": null_counts,
         "null_subheaders": null_headers,
-        "n_string_columns": n_string_columns
+        "n_string_columns": n_string_columns,
+        "index": serialize_index,
     }
 
     return header, arrays
@@ -71,18 +77,12 @@ def serialize_cudf_dataframe(x):
 
 @cuda_deserialize.register(cudf.DataFrame)
 def deserialize_cudf_dataframe(header, frames):
-    columns = header["columns"]
     n_columns = len(header["columns"])
     n_masks = len(header["null_subheaders"])
     n_string_columns = header["n_string_columns"]
 
     masks = {}
     pairs = []
-
-    #import pdb; pdb.set_trace()
-    print(n_columns)
-    print(len(frames))
-    print(header["subheaders"])
 
     for i in range(n_masks):
         subheader = header["null_subheaders"][i]
@@ -101,7 +101,13 @@ def deserialize_cudf_dataframe(header, frames):
             series = cudf.Series(array)
         pairs.append((name, series))
 
-    return cudf.DataFrame(pairs)
+    df = cudf.DataFrame(pairs)
+    if header["index"]:
+        df = df.set_index(df["index"])
+        df.index.name = None
+        df = df.drop(["index"], axis=1)
+
+    return df
 
 
 @cuda_serialize.register(cudf.Series)

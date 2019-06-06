@@ -19,6 +19,11 @@ import dask.dataframe as dd
     ],
 )
 def test_basic(df):
+
+    # Modify the index
+    df.index._start += 1
+    df.index._stop += 1
+
     header, frames = serialize(
         df, serializers=("cuda", "dask", "pickle"), on_error="raise"
     )
