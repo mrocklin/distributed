@@ -19,10 +19,9 @@ import dask.dataframe as dd
     ],
 )
 def test_basic(df):
-
-    # Modify the index
-    df.index._start += 1
-    df.index._stop += 1
+    # Make sure the index is serialized/deserialized
+    df.index._start += 10
+    df.index._stop += 10
 
     header, frames = serialize(
         df, serializers=("cuda", "dask", "pickle"), on_error="raise"
@@ -32,3 +31,7 @@ def test_basic(df):
 
     df2 = deserialize(header, frames, deserializers=("cuda", "dask", "pickle"))
     dd.assert_eq(df, df2)
+
+    print("")
+    print(df)
+    print(df2)
