@@ -176,7 +176,7 @@ def deserialize_cudf_series(header, frames):
 
     for i in range(n_masks):
         subheader = header["null_subheaders"][i]
-        frame = frames[n_columns*2 + i]
+        frame = frames[n_columns + i]
         mask = deserialize_numba_ndarray(subheader, [frame])
         masks[subheader["name"]] = mask
 
