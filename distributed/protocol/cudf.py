@@ -46,10 +46,7 @@ def serialize_cudf_dataframe(x):
             nchars = sum(d_arr.copy_to_host())
             values = np.empty(nchars, dtype=np.int8)
             offsets = np.empty(nchars+1, dtype=np.int32)
-            s.to_offsets(values,offsets)
-            #print("Values and offsets Before:")
-            #print(values)
-            #print(offsets)
+            s.to_offsets(values, offsets)
             n_string_columns += 1
             for i, item in enumerate([values, offsets]):
                 item_ndarray = cuda.to_device(item)
@@ -115,10 +112,6 @@ def deserialize_cudf_dataframe(header, frames):
                 import nvstrings
                 vals = values.copy_to_host()
                 offsets = array.copy_to_host()
-                #print("Values and offsets After:")
-                #print(vals)
-                #print(offsets)
-                #print("values: ",vals.tobytes())
                 array = nvstrings.from_offsets(vals, offsets, subheader["nstrings"])
                 values = None
         
@@ -153,14 +146,6 @@ def serialize_cudf_series(x):
     sub_headers.append(header)
     arrays.append(frame)
 
-    # Serialize index
-    import numba.cuda as cuda
-    ndarray = cuda.to_device(x.index)
-    header, [frame] = serialize_numba_ndarray(ndarray)
-    header["name"] = label
-    sub_headers.append(header)
-    arrays.append(frame)
-
     # Serialize null mask
     if x.null_count:
         header, [frame] = serialize_numba_ndarray(x.nullmask.mem)
@@ -185,8 +170,6 @@ def serialize_cudf_series(x):
 @cuda_deserialize.register(cudf.Series)
 def deserialize_cudf_series(header, frames):
     n_masks = len(header["null_subheaders"])
-
-    #import pdb; pdb.set_trace()
     masks = {}
     pairs = []
     n_columns = 1
@@ -201,9 +184,7 @@ def deserialize_cudf_series(header, frames):
     frame = frames[0]
     name = subheader["name"]
     array = deserialize_numba_ndarray(subheader, [frame])
-
-    # TODO: Deserialize index
-
+    
     if name in masks:
         series = cudf.Series.from_masked_array(array, masks[name])
     else:
