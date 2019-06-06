@@ -27,8 +27,10 @@ def serialize_cudf_dataframe(x):
 
     # Reset index so it can be serialized
     # TODO: make sure we are not overwriting a column named "index"
-    serialize_index = True
-    x = x.reset_index()
+    serialize_index = False
+    if x.index._start > 0:
+        serialize_index = True
+        x = x.reset_index()
 
     for label, col in x.iteritems():
         try:
