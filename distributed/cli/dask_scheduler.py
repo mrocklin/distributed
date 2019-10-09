@@ -4,13 +4,14 @@ import gc
 import os
 import re
 import shutil
+import signal
 import sys
 import tempfile
 import warnings
 
 import click
 
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, TimeoutError
 
 from distributed import Scheduler
 from distributed.preloading import validate_preload_argv
@@ -220,7 +221,15 @@ def main(
     logger.info("Local Directory: %26s", local_directory)
     logger.info("-" * 47)
 
-    install_signal_handlers(loop)
+    signal_fired = False
+
+    def on_signal(signum):
+        nonlocal signal_fired
+        signal_fired = True
+        if signum != signal.SIGINT:
+            logger.info("Exiting on signal %d", signum)
+
+    install_signal_handlers(loop, cleanup=on_signal)
 
     async def run():
         await scheduler
@@ -228,6 +237,9 @@ def main(
 
     try:
         loop.run_sync(run)
+    except TimeoutError:
+        if not signal_fired:
+            logger.info("Timed out starting worker")
     finally:
         scheduler.stop()
         if local_directory_created:
