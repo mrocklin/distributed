@@ -27,8 +27,7 @@ conda create -q -n test-environment python=$PYTHON
 source activate test-environment
 
 # Install dependencies
-# (Tornado pinned to 4.5 until we fix our compatibility with Tornado 5.0)
-conda install -q -c conda-forge \
+conda install -q \
     bokeh \
     click \
     coverage \
@@ -40,29 +39,35 @@ conda install -q -c conda-forge \
     ipywidgets \
     joblib \
     jupyter_client \
-    lz4 \
-    mock \
     netcdf4 \
     paramiko \
+    prometheus_client \
     psutil \
-    pytest=3.1 \
-    pytest-faulthandler \
+    pytest>=4 \
     pytest-timeout \
     python=$PYTHON \
     requests \
+    scipy \
     tblib \
     toolz \
-    tornado=4.5 \
+    tornado=$TORNADO \
     $PACKAGES
 
-pip install -q pytest-repeat
+# For low-level profiler, install libunwind and stacktrace from conda-forge
+# For stacktrace we use --no-deps to avoid upgrade of python
+conda install -c defaults -c conda-forge libunwind zstandard asyncssh
+conda install --no-deps -c defaults -c numba -c conda-forge stacktrace
 
-pip install -q git+https://github.com/dask/dask.git --upgrade
-pip install -q git+https://github.com/joblib/joblib.git --upgrade
-pip install -q git+https://github.com/dask/s3fs.git --upgrade
-pip install -q git+https://github.com/dask/zict.git --upgrade
-pip install -q sortedcollections msgpack-python
+pip install -q "pytest>=4" pytest-repeat pytest-faulthandler pytest-asyncio
+
+pip install -q git+https://github.com/dask/dask.git --upgrade --no-deps
+pip install -q git+https://github.com/joblib/joblib.git --upgrade --no-deps
+pip install -q git+https://github.com/intake/filesystem_spec.git --upgrade --no-deps
+pip install -q git+https://github.com/dask/s3fs.git --upgrade --no-deps
+pip install -q git+https://github.com/dask/zict.git --upgrade --no-deps
+pip install -q sortedcollections msgpack --no-deps
 pip install -q keras --upgrade --no-deps
+pip install -q asyncssh 
 
 if [[ $CRICK == true ]]; then
     conda install -q cython
@@ -71,13 +76,6 @@ fi;
 
 # Install distributed
 pip install --no-deps -e .
-
-# Update Tornado to desired version
-if [[ $TORNADO == "dev" ]]; then
-    pip install -U https://github.com/tornadoweb/tornado/archive/master.zip
-elif [[ ! -z $TORNADO ]]; then
-    pip install -U tornado==$TORNADO
-fi
 
 # For debugging
 echo -e "--\n--Conda Environment\n--"
