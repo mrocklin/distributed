@@ -39,8 +39,10 @@ with suppress(ImportError):
 
     compressions["zlib"] = {"compress": zlib.compress, "decompress": zlib.decompress}
 
-with suppress(ImportError):
+with suppress(ImportError, AttributeError):
     import snappy
+
+    snappy.compress, snappy.decompress
 
     def _fixed_snappy_decompress(data):
         # snappy.decompress() doesn't accept memoryviews
