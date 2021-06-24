@@ -2322,7 +2322,8 @@ class SchedulerState:
         Decide on a worker for task *ts*.  Return a WorkerState.
         """
         ws: WorkerState = None
-        group: TaskGroup = ts._group
+        last: WorkerState = None
+        tasks_per_thread: Py_ssize_t
         valid_workers: set = self.valid_workers(ts)
 
         if (
@@ -2335,31 +2336,24 @@ class SchedulerState:
             ts.state = "no-worker"
             return ws
 
-        total_nthreads: Py_ssize_t
-        if valid_workers is None:
-            total_nthreads = self._total_nthreads
-        else:
-            total_nthreads = 0
-            for ws in valid_workers:
-                total_nthreads += ws._nthreads
+        # Many tasks in group with few dependencies? Assign neighboring tasks together.
+        if (
+            len(ts._group) > self._total_nthreads * 2
+            and sum(map(len, ts._group._dependencies)) < 5
+        ):
+            last = ts._group._last_worker
+            tasks_per_thread = math.ceil(len(ts._group) / self._total_nthreads)
 
-        group_tasks_per_thread: double = (
-            (len(group) / total_nthreads) if total_nthreads > 0 else 0
-        )
-        if group_tasks_per_thread > 2 and sum(map(len, group._dependencies)) < 5:
-            # Group is larger than cluster with very few dependencies; minimize future data transfers.
-            ws = group._last_worker
-            if not (ws and valid_workers is not None and ws not in valid_workers):
-                if (
-                    ws
-                    and ws._occupancy / ws._nthreads / self.get_task_duration(ts)
-                    < group_tasks_per_thread
-                ):
-                    # Schedule sequential tasks onto the same worker until it's filled up.
-                    # Assumes `decide_worker` is being called in priority order.
-                    return ws
-
-                # Pick a new worker for the next few tasks, considering all possible workers
+            if (
+                last
+                and (valid_workers is None or last in valid_workers)
+                and last._occupancy / last._nthreads / self.get_task_duration(ts)
+                < tasks_per_thread
+            ):
+                return last  # more space on worker, continue with last choice
+            else:
+                # Pick a new worker for the next few tasks
+                # ideally we would fall back on existing logic here
                 worker_pool = (
                     valid_workers
                     if valid_workers is not None
@@ -2370,9 +2364,10 @@ class SchedulerState:
                     key=partial(self.worker_objective, ts),
                     default=None,
                 )
-                group._last_worker = ws
+                ts._group._last_worker = ws
                 return ws
 
+        # General case
         if ts._dependencies or valid_workers is not None:
             ws = decide_worker(
                 ts,
