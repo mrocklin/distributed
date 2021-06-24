@@ -2322,10 +2322,9 @@ class SchedulerState:
         Decide on a worker for task *ts*.  Return a WorkerState.
         """
         ws: WorkerState = None
-        last: WorkerState = None
-        tasks_per_thread: Py_ssize_t
         valid_workers: set = self.valid_workers(ts)
 
+        # No Valid Workers
         if (
             valid_workers is not None
             and not valid_workers
@@ -2334,9 +2333,30 @@ class SchedulerState:
         ):
             self._unrunnable.add(ts)
             ts.state = "no-worker"
-            return ws
+            result = ws
 
         # Many tasks in group with few dependencies? Assign neighboring tasks together.
+        elif (
+            len(ts._group) > self._total_nthreads * 2
+            and sum(map(len, ts._group._dependencies)) < 5
+        ):
+            result = self.decide_worker_rootish(ts, valid_workers=valid_workers)
+
+        # General case
+        else:
+            result = self.decide_worker_general(ts, valid_workers=valid_workers)
+
+        if self._validate and ws is not None:
+            assert isinstance(ws, WorkerState), (type(ws), ws)
+            assert ws._address in self._workers_dv
+
+        return result
+
+    @ccall
+    @exceptval(check=False)
+    def decide_worker_rootish(self, ts: TaskState, valid_workers: set) -> WorkerState:
+        last: WorkerState = None
+        tasks_per_thread: Py_ssize_t
         if (
             len(ts._group) > self._total_nthreads * 2
             and sum(map(len, ts._group._dependencies)) < 5
@@ -2352,20 +2372,15 @@ class SchedulerState:
             ):
                 return last  # more space on worker, continue with last choice
             else:
-                # Pick a new worker for the next few tasks
-                # ideally we would fall back on existing logic here
-                worker_pool = (
-                    valid_workers
-                    if valid_workers is not None
-                    else (self._idle_dv or self._workers_dv).values()
+                ts._group._last_worker = self.decide_worker_general(
+                    ts, valid_workers=valid_workers
                 )
-                ws = min(
-                    worker_pool,
-                    key=partial(self.worker_objective, ts),
-                    default=None,
-                )
-                ts._group._last_worker = ws
-                return ws
+                return ts._group._last_worker
+
+    @ccall
+    @exceptval(check=False)
+    def decide_worker_general(self, ts: TaskState, valid_workers: set) -> WorkerState:
+        ws: WorkerState = None
 
         # General case
         if ts._dependencies or valid_workers is not None:
@@ -2397,13 +2412,6 @@ class SchedulerState:
                             break
             else:  # dumb but fast in large case
                 ws = wp_vals[self._n_tasks % n_workers]
-
-        if self._validate:
-            assert ws is None or isinstance(ws, WorkerState), (
-                type(ws),
-                ws,
-            )
-            assert ws._address in self._workers_dv
 
         return ws
 
