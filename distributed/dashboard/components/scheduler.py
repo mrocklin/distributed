@@ -783,7 +783,6 @@ class WorkerNetworkBandwidth(DashboardComponent):
             self.root.yaxis.visible = False
             self.root.ygrid.visible = False
             self.root.toolbar_location = None
-            self.root.yaxis.visible = False
 
     @without_property_validation
     def update(self):
@@ -816,6 +815,193 @@ class WorkerNetworkBandwidth(DashboardComponent):
             }
 
             update(self.source, result)
+
+
+class SystemTimeseries(DashboardComponent):
+    """Timeseries for worker network bandwidth, cpu, memory and disk.
+
+    bandwidth: plots the sum of read_bytes and write_bytes for the workers
+    as a function of time.
+    cpu: plots the sum of cpu for the workers as a function of time.
+    memory: plots the sum of memory for the workers as a function of time.
+    disk: plots the sum of read_bytes_disk and write_bytes_disk for the workers
+    as a function of time.
+
+    The metrics plotted comme from the aggregation of
+    from ws.metrics["val"] for ws in scheduler.workers.values()
+    """
+
+    def __init__(self, scheduler, **kwargs):
+        with log_errors():
+            self.scheduler = scheduler
+            self.source = ColumnDataSource(
+                {
+                    "time": [],
+                    "read_bytes": [],
+                    "write_bytes": [],
+                    "cpu": [],
+                    "memory": [],
+                    "read_bytes_disk": [],
+                    "write_bytes_disk": [],
+                }
+            )
+
+            update(self.source, self.get_data())
+
+            x_range = DataRange1d(follow="end", follow_interval=20000, range_padding=0)
+
+            self.bandwidth = figure(
+                title="Workers Network Bandwidth",
+                x_axis_type="datetime",
+                tools="",
+                x_range=x_range,
+                id="bk-worker-network-bandwidth-ts",
+                name="worker_network_bandwidth-timeseries",
+                **kwargs,
+            )
+
+            self.bandwidth.line(
+                source=self.source,
+                x="time",
+                y="read_bytes",
+                color="red",
+                legend_label="read (sum)",
+            )
+            self.bandwidth.line(
+                source=self.source,
+                x="time",
+                y="write_bytes",
+                color="blue",
+                legend_label="write (sum)",
+            )
+
+            self.bandwidth.yaxis.axis_label = "bytes / second"
+            self.bandwidth.yaxis[0].formatter = NumeralTickFormatter(format="0.0b")
+            self.bandwidth.y_range.start = 0
+            self.bandwidth.yaxis.minor_tick_line_alpha = 0
+            self.bandwidth.xgrid.visible = False
+
+            self.cpu = figure(
+                title="Workers CPU",
+                x_axis_type="datetime",
+                tools="",
+                x_range=x_range,
+                id="bk-worker-cpu-ts",
+                name="worker_cpu-timeseries",
+                **kwargs,
+            )
+
+            self.cpu.line(
+                source=self.source,
+                x="time",
+                y="cpu",
+            )
+            self.cpu.yaxis.axis_label = "Utilization"
+            self.cpu.y_range.start = 0
+            self.cpu.yaxis.minor_tick_line_alpha = 0
+            self.cpu.xgrid.visible = False
+
+            self.memory = figure(
+                title="Workers Memory",
+                x_axis_type="datetime",
+                tools="",
+                x_range=x_range,
+                id="bk-worker-memory-ts",
+                name="worker_memory-timeseries",
+                **kwargs,
+            )
+
+            self.memory.line(
+                source=self.source,
+                x="time",
+                y="memory",
+            )
+            self.memory.yaxis.axis_label = "Bytes"
+            self.memory.yaxis[0].formatter = NumeralTickFormatter(format="0.0b")
+            self.memory.y_range.start = 0
+            self.memory.yaxis.minor_tick_line_alpha = 0
+            self.memory.xgrid.visible = False
+
+            self.disk = figure(
+                title="Workers Disk",
+                x_axis_type="datetime",
+                tools="",
+                x_range=x_range,
+                id="bk-worker-disk-ts",
+                name="worker_disk-timeseries",
+                **kwargs,
+            )
+
+            self.disk.line(
+                source=self.source,
+                x="time",
+                y="read_bytes_disk",
+                color="red",
+                legend_label="read (sum)",
+            )
+            self.disk.line(
+                source=self.source,
+                x="time",
+                y="write_bytes_disk",
+                color="blue",
+                legend_label="write (sum)",
+            )
+
+            self.disk.yaxis.axis_label = "bytes / second"
+            self.disk.yaxis[0].formatter = NumeralTickFormatter(format="0.0b")
+            self.disk.y_range.start = 0
+            self.disk.yaxis.minor_tick_line_alpha = 0
+            self.disk.xgrid.visible = False
+
+    def get_data(self):
+        workers = self.scheduler.workers.values()
+
+        read_bytes = 0
+        write_bytes = 0
+        cpu = 0
+        memory = 0
+        read_bytes_disk = 0
+        write_bytes_disk = 0
+        time = 0
+        for ws in workers:
+            read_bytes += ws.metrics["read_bytes"]
+            write_bytes += ws.metrics["write_bytes"]
+            cpu += ws.metrics["cpu"]
+            memory += ws.metrics["memory"]
+            read_bytes_disk += ws.metrics["read_bytes_disk"]
+            write_bytes_disk += ws.metrics["write_bytes_disk"]
+            time += ws.metrics["time"]
+
+        result = {
+            # use `or` to avoid ZeroDivision when no workers
+            "time": [time / (len(workers) or 1) * 1000],
+            "read_bytes": [read_bytes],
+            "write_bytes": [write_bytes],
+            "cpu": [cpu],
+            "memory": [memory],
+            "read_bytes_disk": [read_bytes_disk],
+            "write_bytes_disk": [write_bytes_disk],
+        }
+        return result
+
+    @without_property_validation
+    def update(self):
+        with log_errors():
+            self.source.stream(self.get_data(), 1000)
+
+            if self.scheduler.workers:
+                y_end_cpu = sum(
+                    ws.nthreads or 1 for ws in self.scheduler.workers.values()
+                )
+                y_end_mem = sum(
+                    ws.memory_limit for ws in self.scheduler.workers.values()
+                )
+            else:
+                y_end_cpu = 1
+                y_end_mem = 100_000_000
+
+            self.cpu.y_range.end = y_end_cpu * 100
+            self.memory.y_range.end = y_end_mem
 
 
 class ComputePerKey(DashboardComponent):
