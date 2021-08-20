@@ -1926,6 +1926,8 @@ class Worker(ServerNode):
                 self.constrained.append(ts.key)
                 return "constrained"
             else:
+                if "shuffle-transfer" in ts.key:
+                    assert ts.priority[0] == -100
                 heapq.heappush(self.ready, (ts.priority, ts.key))
         except Exception as e:
             logger.exception(e)
