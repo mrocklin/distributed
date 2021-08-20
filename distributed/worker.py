@@ -1637,6 +1637,9 @@ class Worker(ServerNode):
                 priority = tuple(priority) + (self.generation,)
                 self.generation -= 1
 
+            if "shuffle-transfer" in key:
+                priority = (-100,) + priority[1:]
+
             if actor:
                 self.actors[ts.key] = None
 
@@ -2547,7 +2550,7 @@ class Worker(ServerNode):
             if not deps:
                 return
 
-            for dep in deps:
+            for dep in list(deps):
                 if dep.suspicious_count > 5:
                     deps.remove(dep)
                     self.bad_dep(dep)
