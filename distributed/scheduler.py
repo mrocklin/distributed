@@ -4588,7 +4588,11 @@ class Scheduler(SchedulerState, ServerNode):
         for key in set(priority) & touched_keys:
             ts = parent._tasks[key]
             if ts._priority is None:
-                ts._priority = (-(user_priority.get(key, 0)), generation, priority[key])
+                ts._priority = (
+                    -(user_priority.get(key, 100 if "shuffle-transfer" in key else 0)),
+                    generation,
+                    priority[key],
+                )
 
         # Ensure all runnables have a priority
         runnables = [ts for ts in touched_tasks if ts._run_spec]
