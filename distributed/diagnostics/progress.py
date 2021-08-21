@@ -1,14 +1,14 @@
 import asyncio
-from collections import defaultdict
 import logging
+from collections import defaultdict
 from timeit import default_timer
 
 from tlz import groupby, valmap
 
 from dask.utils import stringify
-from .plugin import SchedulerPlugin
-from ..utils import key_split, key_split_group, log_errors
 
+from ..utils import key_split, key_split_group, log_errors
+from .plugin import SchedulerPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,9 @@ class Progress(SchedulerPlugin):
             self.scheduler.plugins.remove(self)
         if exception:
             self.status = "error"
-            self.extra.update({"exception": self.scheduler.exceptions[key], "key": key})
+            self.extra.update(
+                {"exception": self.scheduler.tasks[key].exception, "key": key}
+            )
         else:
             self.status = "finished"
         logger.debug("Remove Progress plugin")
@@ -157,9 +159,7 @@ class MultiProgress(Progress):
         self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1, complete=False
     ):
         self.func = func
-        Progress.__init__(
-            self, keys, scheduler, minimum=minimum, dt=dt, complete=complete
-        )
+        super().__init__(keys, scheduler, minimum=minimum, dt=dt, complete=complete)
 
     async def setup(self):
         keys = self.keys
@@ -229,15 +229,15 @@ def format_time(t):
     m, s = divmod(t, 60)
     h, m = divmod(m, 60)
     if h:
-        return "{0:2.0f}hr {1:2.0f}min {2:4.1f}s".format(h, m, s)
+        return f"{h:2.0f}hr {m:2.0f}min {s:4.1f}s"
     elif m:
-        return "{0:2.0f}min {1:4.1f}s".format(m, s)
+        return f"{m:2.0f}min {s:4.1f}s"
     else:
-        return "{0:4.1f}s".format(s)
+        return f"{s:4.1f}s"
 
 
 class AllProgress(SchedulerPlugin):
-    """ Keep track of all keys, grouped by key_split """
+    """Keep track of all keys, grouped by key_split"""
 
     def __init__(self, scheduler):
         self.all = defaultdict(set)
@@ -287,7 +287,7 @@ class AllProgress(SchedulerPlugin):
 
 
 class GroupProgress(SchedulerPlugin):
-    """ Keep track of all keys, grouped by key_split """
+    """Keep track of all keys, grouped by key_split"""
 
     def __init__(self, scheduler):
         self.scheduler = scheduler

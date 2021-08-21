@@ -1,17 +1,18 @@
-from collections import defaultdict, deque
 import logging
+from collections import defaultdict, deque
 from math import log2
 from time import time
 
+from tlz import topk
 from tornado.ioloop import PeriodicCallback
 
 import dask
+from dask.utils import parse_timedelta
+
 from .comm.addressing import get_address_host
 from .core import CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
-from .utils import log_errors, parse_timedelta
-
-from tlz import topk
+from .utils import log_errors
 
 LATENCY = 10e-3
 
@@ -95,7 +96,6 @@ class WorkStealing(SchedulerPlugin):
             return
 
         worker, level = result
-        self.log(("remove-stealable", ts.key, worker, level))
         try:
             self.stealable[worker][level].remove(ts)
         except KeyError:
@@ -110,7 +110,6 @@ class WorkStealing(SchedulerPlugin):
 
         Returns
         -------
-
         cost_multiplier: The increased cost from moving this task as a factor.
         For example a result of zero implies a task without dependencies.
         level: The location within a stealable list to place this value
@@ -178,7 +177,7 @@ class WorkStealing(SchedulerPlugin):
             self.in_flight_occupancy[victim] -= victim_duration
             self.in_flight_occupancy[thief] += thief_duration
         except CommClosedError:
-            logger.info("Worker comm closed while stealing: %s", victim)
+            logger.info("Worker comm %r closed while stealing: %r", victim, ts)
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -454,4 +453,4 @@ def _can_steal(thief, ts, victim):
     return True
 
 
-fast_tasks = {"shuffle-split"}
+fast_tasks = {"split-shuffle"}
