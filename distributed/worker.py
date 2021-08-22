@@ -3093,6 +3093,7 @@ class Worker(ServerNode):
             if sum("assign" in key for key in self.data) > 10 and not any(
                 "shuffle-transfer" in key for _, key in self.ready
             ):
+                self.log_event("pausing", sum("assign" in key for key in self.data))
                 self.paused = True
             elif self.memory_pause_fraction and frac > self.memory_pause_fraction:
                 # Try to free some memory while in paused state
