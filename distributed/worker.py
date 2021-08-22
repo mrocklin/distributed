@@ -3090,7 +3090,11 @@ class Worker(ServerNode):
         async def check_pause(memory):
             frac = memory / self.memory_limit
             # Pause worker threads if above 80% memory use
-            if self.memory_pause_fraction and frac > self.memory_pause_fraction:
+            if sum("assign" in key for key in self.data) > 10 and not any(
+                "shuffle-transfer" in key for _, key in self.ready
+            ):
+                self.paused = True
+            elif self.memory_pause_fraction and frac > self.memory_pause_fraction:
                 # Try to free some memory while in paused state
                 self._throttled_gc.collect()
                 if not self.paused:
