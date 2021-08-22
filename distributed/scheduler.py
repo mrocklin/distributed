@@ -3416,7 +3416,7 @@ class SchedulerState:
                 comm_bytes += nbytes
 
         stack_time: double = ws._occupancy / ws._nthreads
-        start_time: double = stack_time + comm_bytes / self._bandwidth
+        start_time: double = stack_time + comm_bytes / 1  # self._bandwidth
 
         if ts._actor:
             return (len(ws._actors), start_time, ws._nbytes)
