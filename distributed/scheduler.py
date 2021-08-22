@@ -3298,6 +3298,7 @@ class SchedulerState:
         nbytes: Py_ssize_t = 0
         for dts in deps:
             nbytes += dts._nbytes
+        return nbytes
         return nbytes / self._bandwidth
 
     @ccall
