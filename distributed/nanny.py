@@ -507,9 +507,12 @@ class Nanny(ServerNode):
         return run(self, comm, *args, **kwargs)
 
     def _on_exit_sync(self, exitcode):
+        logger.info("_on_exit sync")
         self.loop.add_callback(self._on_exit, exitcode)
 
     async def _on_exit(self, exitcode):
+        logger.info("_on_exit 1")
+
         with log_errors():
             if self.status not in (
                 Status.init,
@@ -524,6 +527,7 @@ class Nanny(ServerNode):
                     if not self.reconnect:
                         await self.close()
                         return
+            logger.info("_on_exit 2")
 
             try:
                 if self.status not in (
@@ -531,6 +535,7 @@ class Nanny(ServerNode):
                     Status.closed,
                     Status.closing_gracefully,
                 ):
+                    logger.info("_on_exit 3")
                     if self.auto_restart:
                         logger.warning("Restarting worker")
                         await self.instantiate()
@@ -699,7 +704,9 @@ class WorkerProcess:
         return self.status
 
     def _on_exit(self, proc):
+        logger.info("WorkerProcess._on_exit")
         if proc is not self.process:
+            logger.info("mismatched process")
             # Ignore exit of old process instance
             return
         self.mark_stopped()
@@ -721,6 +728,7 @@ class WorkerProcess:
         return self.process.pid if self.process and self.process.is_alive() else None
 
     def mark_stopped(self):
+        logger.info("WorkerProcess.mark_stopped, %s", self.status)
         if self.status != Status.stopped:
             r = self.process.exitcode
             assert r is not None
@@ -740,6 +748,7 @@ class WorkerProcess:
             self.worker_dir = None
             # User hook
             if self.on_exit is not None:
+                logger.info("WorkerProcess call Nanny on_exit")
                 self.on_exit(r)
 
     async def kill(self, timeout: float = 2, executor_wait: bool = True):
