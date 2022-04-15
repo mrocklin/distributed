@@ -535,7 +535,7 @@ class Nanny(ServerNode):
                     Status.closed,
                     Status.closing_gracefully,
                 ):
-                    logger.info("_on_exit 3")
+                    logger.info("_on_exit 3, %s", self.auto_restart)
                     if self.auto_restart:
                         logger.warning("Restarting worker")
                         await self.instantiate()
