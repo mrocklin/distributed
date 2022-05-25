@@ -780,7 +780,7 @@ def _serialize_memoryview(obj):
 @dask_deserialize.register(memoryview)
 def _deserialize_memoryview(header, frames):
     if len(frames) == 1:
-        out = ensure_memoryview(frames[0])
+        out = memoryview(frames[0]).cast("B")
     else:
         out = memoryview(b"".join(frames))
     out = out.cast(header["format"], header["shape"])
