@@ -101,6 +101,7 @@ from distributed.utils_comm import (
     scatter_to_workers,
     unpack_remotedata,
 )
+from distributed.utils_hlg import _materialize_and_process_hlg
 from distributed.worker import get_client, get_worker, secede
 
 logger = logging.getLogger(__name__)
@@ -2904,44 +2905,71 @@ class Client(SyncMethodMixin):
             # Create futures before sending graph (helps avoid contention)
             futures = {key: Future(key, self, inform=False) for key in keyset}
 
-            # TODO: Need to preserve the option to materialize the
-            # graph here and send it to the scheduler without Pickle
-            if self.scheduler.address.startswith("inproc://"):
-                kwargs = {"graph": dsk}
-            else:
-                buffers = []
-                out = pickle.dumps(dsk, buffer_callback=buffers.append)
-                buffers = [buffer.raw() for buffer in buffers]
-                nbytes = len(out) + sum(map(len, buffers))
-                if nbytes > 10_000_000:
-                    warnings.warn(
-                        f"Sending large graph of {format_bytes(nbytes)}.\n"
-                        "This may cause some slowdown.\n"
-                        "Consider scattering data ahead of time and using futures."
-                    )
-                kwargs = {
-                    "graph_header": out,
-                    "graph_frames": buffers,
-                }
+            # Construct _send_to_scheduler argument
+            if dask.config.get("distributed.scheduler.pickle"):
+                # TODO: This config value may vary between
+                # client and scheduler. Is this okay?
 
-            self._send_to_scheduler(
-                {
-                    "op": "update-graph-hlg",
-                    "keys": list(map(stringify, keys)),
-                    "priority": priority,
-                    "submitting_task": getattr(thread_state, "key", None),
-                    "fifo_timeout": fifo_timeout,
-                    "actors": actors,
-                    "code": self._get_computation_code(),
-                    "retries": retries,
-                    "resources": resources,
-                    "user_priority": user_priority,
-                    "workers": workers,
-                    "allow_other_workers": allow_other_workers,
-                    "annotations": annotations,
-                    **kwargs,
-                }
-            )
+                # Send HLG to the scheduler
+                if self.scheduler.address.startswith("inproc://"):
+                    kwargs = {"graph": dsk}
+                else:
+                    buffers = []
+                    out = pickle.dumps(dsk, buffer_callback=buffers.append)
+                    buffers = [buffer.raw() for buffer in buffers]
+                    nbytes = len(out) + sum(map(len, buffers))
+                    if nbytes > 10_000_000:
+                        warnings.warn(
+                            f"Sending large graph of {format_bytes(nbytes)}.\n"
+                            "This may cause some slowdown.\n"
+                            "Consider scattering data ahead of time and using futures."
+                        )
+                    kwargs = {
+                        "graph_header": out,
+                        "graph_frames": buffers,
+                    }
+
+                self._send_to_scheduler(
+                    {
+                        "op": "update-graph-hlg",
+                        "keys": list(map(stringify, keys)),
+                        "priority": priority,
+                        "submitting_task": getattr(thread_state, "key", None),
+                        "fifo_timeout": fifo_timeout,
+                        "actors": actors,
+                        "code": self._get_computation_code(),
+                        "retries": retries,
+                        "resources": resources,
+                        "user_priority": user_priority,
+                        "workers": workers,
+                        "allow_other_workers": allow_other_workers,
+                        "annotations": annotations,
+                        **kwargs,
+                    }
+                )
+            else:
+                # Send materialized graph to the scheduler
+                self._send_to_scheduler(
+                    {
+                        "op": "update-graph",
+                        "submitting_task": getattr(thread_state, "key", None),
+                        "fifo_timeout": fifo_timeout,
+                        "actors": actors,
+                        "code": self._get_computation_code(),
+                        "stimulus_id": f"update-graph-{time()}",
+                        **_materialize_and_process_hlg(
+                            dsk,
+                            keys,
+                            priority=priority,
+                            resources=resources,
+                            retries=retries,
+                            user_priority=user_priority,
+                            workers=workers,
+                            allow_other_workers=allow_other_workers,
+                            annotations=annotations,
+                        ),
+                    }
+                )
             return futures
 
     def get(

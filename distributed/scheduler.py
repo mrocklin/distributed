@@ -37,7 +37,6 @@ from sortedcontainers import SortedDict, SortedSet
 from tlz import (
     first,
     groupby,
-    keymap,
     merge,
     merge_sorted,
     merge_with,
@@ -49,16 +48,8 @@ from tlz import (
 from tornado.ioloop import IOLoop, PeriodicCallback
 
 import dask
-from dask.core import get_deps
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import (
-    format_bytes,
-    format_time,
-    parse_bytes,
-    parse_timedelta,
-    stringify,
-    tmpfile,
-)
+from dask.utils import format_bytes, format_time, parse_bytes, parse_timedelta, tmpfile
 from dask.widgets import get_template
 
 from distributed import cluster_dump, preloading, profile
@@ -112,6 +103,7 @@ from distributed.utils_comm import (
     retry_operation,
     scatter_to_workers,
 )
+from distributed.utils_hlg import _materialize_and_process_hlg
 from distributed.utils_perf import disable_gc_diagnosis, enable_gc_diagnosis
 from distributed.variable import VariableExtension
 
@@ -3833,158 +3825,27 @@ class Scheduler(SchedulerState, ServerNode):
         else:
             graph_ = graph
 
-        if annotations is None:
-            annotations = {}
-
-        workers = workers or annotations.pop("workers", None)
-        allow_other_workers = allow_other_workers or annotations.pop(
-            "allow_other_workers", None
+        # Materialize the HLG and extract graph-related info
+        hlg_info = _materialize_and_process_hlg(
+            graph_,
+            keys,
+            priority=priority,
+            resources=resources,
+            retries=retries,
+            user_priority=user_priority,
+            workers=workers,
+            allow_other_workers=allow_other_workers,
+            annotations=annotations,
         )
-        if retries is None:
-            retries = annotations.pop("retries", None)
-        resources = resources or annotations.pop("resources", None)
-        user_priority = annotations.pop("priority", user_priority)
-
-        if isinstance(workers, (str, Number)):
-            workers = [workers]
-        if isinstance(workers, (tuple, set)):
-            workers = list(workers)
-        if isinstance(workers, list):
-            restrictions = workers
-        elif workers is None:
-            restrictions = []
-        else:
-            raise TypeError("Workers must be a list or set of workers or None")
-
-        dsk = dict(graph_)
-
-        if allow_other_workers:
-            loose_restrictions = set(dsk)
-        else:
-            loose_restrictions = set()
-
-        from distributed.utils_comm import unpack_remotedata
-
-        dependencies, dependents = get_deps(dsk)
-
-        # Remove `Future` objects from graph and note any future     dependencies
-        dsk2 = {}
-        fut_deps = {}
-        for k, v in dsk.items():
-            dsk2[k], futs = unpack_remotedata(v, byte_keys=True)
-            if futs:
-                fut_deps[k] = futs
-        dsk = dsk2
-
-        # - Add in deps for any tasks that depend on futures
-        for k, futures in fut_deps.items():
-            dependencies[k].update(f.key for f in futures)
-
-        pre_stringify = set(dsk)
-        dsk = {stringify(k): stringify(v, exclusive=graph_) for k, v in dsk.items()}
-
-        def process(x, keys=dsk, string_keys=pre_stringify):
-            if callable(x):
-                return {stringify(k): x(k) for k in keys}
-            elif isinstance(x, (int, dict, tuple, set, list)):
-                return {stringify(k): x for k in string_keys or map(stringify, keys)}
-            elif isinstance(x, dict):
-                return keymap(stringify, x)
-            raise TypeError()
-
-        if annotations:
-            annotations = process(annotations)
-        if retries:
-            retries = process(retries)
-        if resources:
-            resources = process(resources)
-        if user_priority:
-            user_priority = process(user_priority)
-        if restrictions:
-            _restrictions = process(restrictions)
-        else:
-            _restrictions = {}
-
-        for layer in graph_.layers.values():
-            if not layer.annotations:
-                continue
-            layer_annotations: dict = dict(layer.annotations)
-            if "retries" in layer_annotations:
-                retries = retries or {}
-                d = process(layer_annotations["retries"], keys=layer, string_keys=None)
-                retries.update(d)  # TODO: there is an implicit ordering here
-            if "priority" in layer_annotations:
-                user_priority = user_priority or {}
-                d = process(
-                    layer_annotations.pop("priority"),
-                    keys=layer,
-                    string_keys=None,
-                )
-                user_priority.update(d)  # TODO: there is an implicit ordering here
-            if "resources" in layer_annotations:
-                resources = resources or {}
-                d = process(
-                    layer_annotations["resources"], keys=layer, string_keys=None
-                )
-                resources.update(d)  # TODO: there is an implicit ordering here
-            if "workers" in layer_annotations:
-                if isinstance(layer_annotations["workers"], (str, int)):
-                    layer_annotations["workers"] = (layer_annotations["workers"],)
-                _restrictions = _restrictions or {}
-                d = process(layer_annotations["workers"], keys=layer, string_keys=None)
-                _restrictions.update(d)  # TODO: there is an implicit ordering here
-
-            if "allow_other_workers" in layer_annotations:
-                if layer_annotations["allow_other_workers"] is True:
-                    loose_restrictions.update(set(map(stringify, layer)))
-
-            if layer_annotations:
-                d = process(layer_annotations, keys=layer, string_keys=None)
-                annotations.update(d)
-
-        from distributed.worker import dumps_task
-
-        dsk = valmap(dumps_task, dsk)
-
-        dependencies = {
-            stringify(k): {stringify(dep) for dep in deps}
-            for k, deps in dependencies.items()
-        }
-
-        # Remove any self-dependencies (happens on test_publish_bag() and others)
-        for k, v in dependencies.items():
-            deps = set(v)
-            if k in deps:
-                deps.remove(k)
-            dependencies[k] = deps
-
-        if priority is None:
-            # Removing all non-local keys before calling order()
-            dsk_keys = set(dsk)  # intersection() of sets is much faster than dict_keys
-            stripped_deps = {
-                k: v.intersection(dsk_keys)
-                for k, v in dependencies.items()
-                if k in dsk_keys
-            }
-            priority = dask.order.order(dsk, dependencies=stripped_deps)
 
         return self.update_graph(
-            client,
-            dsk,
-            keys,
-            dependencies,
-            _restrictions,
-            priority,
-            loose_restrictions,
-            resources,
-            submitting_task,
-            retries,
-            user_priority,
-            actors,
-            fifo_timeout,
-            annotations,
+            client=client,
+            submitting_task=submitting_task,
+            actors=actors,
+            fifo_timeout=fifo_timeout,
             code=code,
             stimulus_id=f"update-graph-{time()}",
+            **hlg_info,
         )
 
     def update_graph(
