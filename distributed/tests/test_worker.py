@@ -2668,7 +2668,12 @@ async def test_run_spec_deserialize_fail(c, s, a, b):
         def __reduce__(self):
             return lambda: 1 / 0, ()
 
-    with captured_logger("distributed.worker") as logger:
+    # Must dissable pickle on the scheduler to
+    # ensure 'Could not deserialize task' is
+    # written to the worker log
+    with captured_logger("distributed.worker") as logger, dask.config.set(
+        {"distributed.scheduler.pickle": False}
+    ):
         fut = c.submit(F())
         assert isinstance(await fut.exception(), ZeroDivisionError)
 
