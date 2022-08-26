@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from numbers import Number
+from typing import Any
 
 from tlz import keymap, valmap
 
@@ -13,13 +14,13 @@ from dask.utils import stringify
 def _materialize_and_process_hlg(
     hlg: HighLevelGraph,
     keys: list[str],
-    priority=None,
-    resources=None,
-    retries=None,
-    user_priority=0,
-    workers=None,
-    allow_other_workers=None,
-    annotations=None,
+    priority: dict | None = None,
+    resources: dict | None = None,
+    retries: dict | None = None,
+    user_priority: dict | None = None,
+    workers: Any = None,
+    allow_other_workers: Any = None,
+    annotations: dict | None = None,
 ) -> dict:
     """Materialize and process a HighLevelGraph object
 
@@ -30,8 +31,7 @@ def _materialize_and_process_hlg(
     from distributed.utils_comm import unpack_remotedata
     from distributed.worker import dumps_task
 
-    if annotations is None:
-        annotations = {}
+    annotations = annotations or {}
 
     workers = workers or annotations.pop("workers", None)
     allow_other_workers = allow_other_workers or annotations.pop(
@@ -134,6 +134,7 @@ def _materialize_and_process_hlg(
 
         if layer_annotations:
             d = process(layer_annotations, keys=layer, string_keys=None)
+            annotations = annotations or {}
             annotations.update(d)
 
     dsk = valmap(dumps_task, dsk)
@@ -170,6 +171,6 @@ def _materialize_and_process_hlg(
         loose_restrictions=loose_restrictions,
         resources=resources,
         retries=retries,
-        user_priority=user_priority,
+        user_priority=user_priority or 0,
         annotations=annotations,
     )
